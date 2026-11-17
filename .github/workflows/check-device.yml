@@ -93,6 +93,11 @@ jobs:
             --dtb uefi/files/Resources/DTBs/cupid.dtb \
             --check docs/device-facts.txt
 
+      - name: Check the phone's vendor DXE module inventory
+        run: |
+          set -euo pipefail
+          python3 tools/uefi-vendor-modules.py --check docs/uefi-vendor-modules.json
+
       - name: Check the UEFI tooling against its own fixtures
         run: |
           set -euo pipefail
