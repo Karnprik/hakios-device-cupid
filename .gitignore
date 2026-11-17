@@ -3,3 +3,6 @@ __pycache__/
 # the vendor's own firmware and the phone's own device tree: pulled, never committed
 fw-*/
 prebuilt/device-tree.dtb
+# the phone's own firmware volume: pulled, never committed
+uefi.img
+fw-stage/

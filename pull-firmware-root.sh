@@ -22,6 +22,14 @@ cp /vendor/firmware/aw8697_haptic.bin \$S/haptic/ 2>/dev/null
 cp /vendor/lib64/camera/com.qti.sensormodule.*.bin \$S/camera/ 2>/dev/null
 chmod -R a+rX \$S\"'"
 
+# the UEFI firmware volume, which holds the vendor DXE drivers. dd off the block device, read-only,
+# into the same staging directory; the first partition name that exists wins.
+for part in xbl_a xbl_b uefi_a uefi_b xbl uefi; do
+	if adb shell "su -c '[ -e /dev/block/by-name/$part ]'" 2>/dev/null | grep -q .; then
+		adb shell "su -c 'dd if=/dev/block/by-name/$part of=$S/uefi.img bs=4096 status=none'" >/dev/null 2>&1 && break
+	fi
+done
+
 rm -rf fw-stage
 adb pull "$S" fw-stage >/dev/null
 adb shell "su -c 'rm -rf $S'" >/dev/null 2>&1 || true
@@ -30,6 +38,12 @@ rm -rf fw-gpu fw-wifi fw-audio fw-modem fw-haptic fw-camera
 for d in gpu wifi audio modem haptic camera; do
 	[ -d "fw-stage/$d" ] && mv "fw-stage/$d" "fw-$d"
 done
+if [ -s fw-stage/uefi.img ]; then
+	mv fw-stage/uefi.img uefi.img
+	echo "pull-firmware-root.sh: uefi.img: $(wc -c < uefi.img | tr -d ' ') bytes"
+else
+	echo "pull-firmware-root.sh: uefi.img: not found; none of the xbl/uefi partition names matched"
+fi
 rm -rf fw-stage
 
 for d in fw-gpu fw-wifi fw-audio fw-modem fw-haptic fw-camera; do
