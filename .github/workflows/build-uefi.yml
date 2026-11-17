@@ -210,103 +210,103 @@ jobs:
             # Extract with Python's safe filter rather than tar itself: an archive with "../"
             # members must not be able to write outside the temporary directory.
             python3 -c '
-            import sys, tarfile
-            archive, dest = sys.argv[1], sys.argv[2]
-            with tarfile.open(archive, "r:gz") as t:
-                try:
-                    t.extractall(dest, filter="tar")
-                except TypeError:          # Python without the filter argument
-                    t.extractall(dest)
-            ' "$tmp/vendor.tar.gz" "$tmp"
-            mkdir -p "$VENDOR_DIR"
-            # Only the directories Mu-Silicium's driver list looks in; nothing else is copied.
-            for d in QcomPkg MdeModulePkg RawFiles; do
-              if [ -d "$tmp/$d" ]; then cp -r "$tmp/$d" "$VENDOR_DIR/"; fi
-            done
-            rm -rf "$tmp"
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          elif [ -n "$(find "$VENDOR_DIR" -type f -name '*.inf' -print -quit 2>/dev/null)" ]; then
-            # The vendor's drivers are .inf + .efi; Binaries/cupid/README.md is tracked here and
-            # is not a driver, so look for the .inf files and not for any file.
-            echo "Vendor UEFI drivers found in the tree: $(find "$VENDOR_DIR" -type f -name '*.inf' | wc -l) .inf files"
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning ::No vendor UEFI drivers in $VENDOR_DIR -- the FD cannot be linked without them."
-            echo "::warning ::They are the phone's own: extract them from your own xbl (uefi/README.md in the common repository)."
-            echo "::warning ::Re-run with workflow_dispatch -> vendor_binaries_url, or set the VENDOR_BINARIES_URL secret."
-          fi
+import sys, tarfile
+archive, dest = sys.argv[1], sys.argv[2]
+with tarfile.open(archive, "r:gz") as t:
+try:
+t.extractall(dest, filter="tar")
+except TypeError:          # Python without the filter argument
+t.extractall(dest)
+' "$tmp/vendor.tar.gz" "$tmp"
+mkdir -p "$VENDOR_DIR"
+# Only the directories Mu-Silicium's driver list looks in; nothing else is copied.
+for d in QcomPkg MdeModulePkg RawFiles; do
+if [ -d "$tmp/$d" ]; then cp -r "$tmp/$d" "$VENDOR_DIR/"; fi
+done
+rm -rf "$tmp"
+echo "present=true" >> "$GITHUB_OUTPUT"
+elif [ -n "$(find "$VENDOR_DIR" -type f -name '*.inf' -print -quit 2>/dev/null)" ]; then
+# The vendor's drivers are .inf + .efi; Binaries/cupid/README.md is tracked here and
+# is not a driver, so look for the .inf files and not for any file.
+echo "Vendor UEFI drivers found in the tree: $(find "$VENDOR_DIR" -type f -name '*.inf' | wc -l) .inf files"
+echo "present=true" >> "$GITHUB_OUTPUT"
+else
+echo "present=false" >> "$GITHUB_OUTPUT"
+echo "::warning ::No vendor UEFI drivers in $VENDOR_DIR -- the FD cannot be linked without them."
+echo "::warning ::They are the phone's own: extract them from your own xbl (uefi/README.md in the common repository)."
+echo "::warning ::Re-run with workflow_dispatch -> vendor_binaries_url, or set the VENDOR_BINARIES_URL secret."
+fi
 
-      - name: Validate the platform
-        run: |
-          set -euo pipefail
-          mkdir -p logs
-          python3 uefi/tools/validate.py --device . --mu Mu-Silicium --json logs/validate.json \
-            | tee logs/validate.txt
+- name: Validate the platform
+run: |
+set -euo pipefail
+mkdir -p logs
+python3 uefi/tools/validate.py --device . --mu Mu-Silicium --json logs/validate.json \
+| tee logs/validate.txt
 
-      - name: Build cupidPkg
-        if: steps.vendor.outputs.present == 'true'
-        run: |
-          set -euo pipefail
-          source "$VENV/bin/activate"
-          cd Mu-Silicium
-          python3 build_uefi.py -d "$DEVICE" -r "${{ inputs.build_target || 'RELEASE' }}" -c 2>&1 \
-            | tee "$GITHUB_WORKSPACE/logs/build.log"
-          fd=$(ls Build/cupidPkg/*/FV/SILICIUM_UEFI.fd)
-          ls -la "$fd"
-          # A linked FD is the only thing a successful compile produces; it is not a boot test.
-          [ -s "$fd" ] || { echo "::error ::the built FD is empty: $fd"; exit 1; }
-          echo "::notice ::Built $fd. This says nothing about booting on a phone."
+- name: Build cupidPkg
+if: steps.vendor.outputs.present == 'true'
+run: |
+set -euo pipefail
+source "$VENV/bin/activate"
+cd Mu-Silicium
+python3 build_uefi.py -d "$DEVICE" -r "${{ inputs.build_target || 'RELEASE' }}" -c 2>&1 \
+| tee "$GITHUB_WORKSPACE/logs/build.log"
+fd=$(ls Build/cupidPkg/*/FV/SILICIUM_UEFI.fd)
+ls -la "$fd"
+# A linked FD is the only thing a successful compile produces; it is not a boot test.
+[ -s "$fd" ] || { echo "::error ::the built FD is empty: $fd"; exit 1; }
+echo "::notice ::Built $fd. This says nothing about booting on a phone."
 
-      - name: Remove the vendor drivers
-        if: always()
-        run: |
-          set -euo pipefail
-          # The vendor's binaries are never uploaded and never committed.
-          rm -rf "$VENDOR_DIR"
-          echo "vendor drivers removed from the workspace"
+- name: Remove the vendor drivers
+if: always()
+run: |
+set -euo pipefail
+# The vendor's binaries are never uploaded and never committed.
+rm -rf "$VENDOR_DIR"
+echo "vendor drivers removed from the workspace"
 
-      - name: Upload logs and the validation report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: cupid-uefi-logs
-          path: logs/
-          if-no-files-found: warn
-          retention-days: 30
+- name: Upload logs and the validation report
+if: always()
+uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+with:
+name: cupid-uefi-logs
+path: logs/
+if-no-files-found: warn
+retention-days: 30
 
-      - name: Upload the built UEFI
-        if: always() && steps.vendor.outputs.present == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: cupid-uefi-binaries
-          path: |
-            Mu-Silicium/Build/cupidPkg/**/FV/SILICIUM_UEFI.fd
-            Mu-Silicium/Build/cupidPkg/**/FV/SILICIUM_UEFI.fd.gz
-            Mu-Silicium/Mu-cupid*.img
-            Mu-Silicium/Mu-cupid*.bin
-          if-no-files-found: warn
-          retention-days: 30
+- name: Upload the built UEFI
+if: always() && steps.vendor.outputs.present == 'true'
+uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+with:
+name: cupid-uefi-binaries
+path: |
+Mu-Silicium/Build/cupidPkg/**/FV/SILICIUM_UEFI.fd
+Mu-Silicium/Build/cupidPkg/**/FV/SILICIUM_UEFI.fd.gz
+Mu-Silicium/Mu-cupid*.img
+Mu-Silicium/Mu-cupid*.bin
+if-no-files-found: warn
+retention-days: 30
 
-      - name: Report
-        if: always()
-        env:
-          PRESENT: ${{ steps.vendor.outputs.present }}
-        run: |
-          set -uo pipefail
-          echo "## cupid UEFI" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Mu-Silicium: \`$MU_SILICIUM_BASE\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- hakios-uefi: \`$HAKIOS_UEFI_REV\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- runner: \`$RUNNER\`" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$PRESENT" = "true" ]; then
-            echo "- vendor drivers: supplied; the FD was linked" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- vendor drivers: **absent**; the FD was not linked" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The vendor's UEFI drivers are the phone's own and are not in this repository. Supply them with"
-            echo "\`workflow_dispatch\` -> \`vendor_binaries_url\` (a tar.gz whose root is the contents of \`Binaries/cupid/\`)"
-            echo "or set the \`VENDOR_BINARIES_URL\` secret, then run again." >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "A successful build means the platform compiles. It is not a boot test: no boot on a phone is claimed." >> "$GITHUB_STEP_SUMMARY"
+- name: Report
+if: always()
+env:
+PRESENT: ${{ steps.vendor.outputs.present }}
+run: |
+set -uo pipefail
+echo "## cupid UEFI" >> "$GITHUB_STEP_SUMMARY"
+echo "" >> "$GITHUB_STEP_SUMMARY"
+echo "- Mu-Silicium: \`$MU_SILICIUM_BASE\`" >> "$GITHUB_STEP_SUMMARY"
+echo "- hakios-uefi: \`$HAKIOS_UEFI_REV\`" >> "$GITHUB_STEP_SUMMARY"
+echo "- runner: \`$RUNNER\`" >> "$GITHUB_STEP_SUMMARY"
+if [ "$PRESENT" = "true" ]; then
+echo "- vendor drivers: supplied; the FD was linked" >> "$GITHUB_STEP_SUMMARY"
+else
+echo "- vendor drivers: **absent**; the FD was not linked" >> "$GITHUB_STEP_SUMMARY"
+echo "" >> "$GITHUB_STEP_SUMMARY"
+echo "The vendor's UEFI drivers are the phone's own and are not in this repository. Supply them with"
+echo "\`workflow_dispatch\` -> \`vendor_binaries_url\` (a tar.gz whose root is the contents of \`Binaries/cupid/\`)"
+echo "or set the \`VENDOR_BINARIES_URL\` secret, then run again." >> "$GITHUB_STEP_SUMMARY"
+fi
+echo "" >> "$GITHUB_STEP_SUMMARY"
+echo "A successful build means the platform compiles. It is not a boot test: no boot on a phone is claimed." >> "$GITHUB_STEP_SUMMARY"
