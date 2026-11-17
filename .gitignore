@@ -13,3 +13,4 @@ xbl_a.img
 fw-stage/
 # scratch from unpacking the phone's firmware volume
 work/
+work-gz*.bin
