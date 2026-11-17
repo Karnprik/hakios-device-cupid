@@ -213,10 +213,10 @@ jobs:
 import sys, tarfile
 archive, dest = sys.argv[1], sys.argv[2]
 with tarfile.open(archive, "r:gz") as t:
-try:
-t.extractall(dest, filter="tar")
-except TypeError:          # Python without the filter argument
-t.extractall(dest)
+    try:
+        t.extractall(dest, filter="tar")
+    except TypeError:          # Python without the filter argument
+        t.extractall(dest)
 ' "$tmp/vendor.tar.gz" "$tmp"
 mkdir -p "$VENDOR_DIR"
 # Only the directories Mu-Silicium's driver list looks in; nothing else is copied.
