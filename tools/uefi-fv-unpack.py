@@ -284,6 +284,7 @@ def walk_fv(data, report, out, depth=0):
             "size": file_header["size"],
             "sections": sorted(file_out.keys()),
             "payload": file_out,
+            "body_offset": offset + file_header["header_size"],
         })
         offset += file_header["size"]
         offset = (offset + 7) & ~7   # files are 8-byte aligned
@@ -300,6 +301,7 @@ def unpack(data, out_dir, report):
             handle.write("guid: %s\n" % entry["guid"])
             handle.write("type: 0x%02x\n" % entry["type"])
             handle.write("size: %d\n" % entry["size"])
+            handle.write("body_offset: %d\n" % entry["body_offset"])
             handle.write("sections: %s\n" % ", ".join(entry["sections"]))
         for filename, payload in entry.get("payload", {}).items():
             with open(os.path.join(directory, filename), "wb") as handle:

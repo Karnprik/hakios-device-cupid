@@ -53,7 +53,8 @@ def read_unpacked(directories):
                 "size": int(fields.get("size", 0)),
                 "name": name,
                 "directory": entry,
-                "sections": [s for s in fields.get("sections", "").split(",") if s.strip()],
+                "body_offset": int(fields.get("body_offset", 0)),
+                "sections": [s.strip() for s in fields.get("sections", "").split(",") if s.strip()],
             })
     return sorted(modules, key=lambda m: (m["name"] or "", m["guid"] or ""))
 

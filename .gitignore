@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 # the vendor's own firmware and the phone's own device tree: pulled, never committed
 fw-*/
+# the phone's vendor UEFI drivers: staged for a local build, never committed
+uefi/files/Binaries/cupid/*
+!uefi/files/Binaries/cupid/README.md
 prebuilt/device-tree.dtb
 # the phone's own firmware volume: pulled, never committed
 uefi.img
