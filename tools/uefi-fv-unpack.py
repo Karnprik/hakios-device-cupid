@@ -74,7 +74,7 @@ SECTION_NAMES = {
 # EFI_GUIDs as they appear on disk: Data1, Data2, Data3 little-endian, Data4 as-is.
 LZMA_CUSTOM_DECOMPRESS_GUID = "EE4E5898-3914-4259-9D6E-DC7BD79403CF"
 TIANO_CUSTOM_DECOMPRESS_GUID = "A31280AD-481E-41B6-95E8-127F4C984779"
-
+GZIP_CUSTOM_DECOMPRESS_GUID = "1D301FE9-BE79-4353-91C2-D23BC959AE0C"
 GZIP_MAGIC = b"\x1f\x8b"
 
 
@@ -174,7 +174,9 @@ def decompress_guid_defined(body, guid, report):
     section_guid = guid_from_bytes(body[:16])
     data_offset = struct.unpack_from("<H", body, 16)[0]
     attributes = struct.unpack_from("<H", body, 18)[0]
-    payload = body[data_offset:]
+    # DataOffset is relative to the start of the GUID_DEFINED section, which includes the 4-byte
+    # common section header (Size[3] + Type). `body` starts after that header, so subtract 4.
+    payload = body[max(data_offset - 4, 0):]
     if section_guid == LZMA_CUSTOM_DECOMPRESS_GUID:
         try:
             return lzma.decompress(payload, format=lzma.FORMAT_ALONE)
@@ -186,6 +188,13 @@ def decompress_guid_defined(body, guid, report):
         report.unsupported_section(SECTION_GUID_DEFINED, section_guid,
                                    "the EFI standard (Tiano) decompressor is not implemented here")
         return None
+    if section_guid == GZIP_CUSTOM_DECOMPRESS_GUID:
+        try:
+            return gzip.decompress(payload)
+        except OSError as error:
+            report.unsupported_section(SECTION_GUID_DEFINED, section_guid,
+                                       "gzip decompression failed: %s" % error)
+            return None
     if payload[:2] == GZIP_MAGIC:
         try:
             return gzip.decompress(payload)
@@ -274,6 +283,7 @@ def walk_fv(data, report, out, depth=0):
             "type": file_header["type"],
             "size": file_header["size"],
             "sections": sorted(file_out.keys()),
+            "payload": file_out,
         })
         offset += file_header["size"]
         offset = (offset + 7) & ~7   # files are 8-byte aligned
@@ -291,6 +301,9 @@ def unpack(data, out_dir, report):
             handle.write("type: 0x%02x\n" % entry["type"])
             handle.write("size: %d\n" % entry["size"])
             handle.write("sections: %s\n" % ", ".join(entry["sections"]))
+        for filename, payload in entry.get("payload", {}).items():
+            with open(os.path.join(directory, filename), "wb") as handle:
+                handle.write(payload)
     return out
 
 
@@ -375,7 +388,7 @@ def self_test():
     inner = make_section(SECTION_PE32, pe32)
     compressed = lzma.compress(inner, format=lzma.FORMAT_ALONE)
     guid = uuid.UUID(LZMA_CUSTOM_DECOMPRESS_GUID).bytes_le
-    guided = guid + struct.pack("<HH", 20, 0) + compressed
+    guided = guid + struct.pack("<HH", 24, 0) + compressed
     file_out = {}
     walk_sections(make_ffs("11111111-2222-3333-4444-555555555555", 0x0B,
                            [make_section(SECTION_GUID_DEFINED, guided)]), 24,
@@ -384,7 +397,7 @@ def self_test():
 
     # a gzip GUID_DEFINED section is handled as a heuristic
     gz = gzip.compress(inner)
-    guided_gz = uuid.UUID("9E4A5898-3914-4259-9D6E-DC7BD79403CF").bytes_le + struct.pack("<HH", 20, 0) + gz
+    guided_gz = uuid.UUID("9E4A5898-3914-4259-9D6E-DC7BD79403CF").bytes_le + struct.pack("<HH", 24, 0) + gz
     file_out = {}
     walk_sections(make_ffs("11111111-2222-3333-4444-555555555555", 0x0B,
                            [make_section(SECTION_GUID_DEFINED, guided_gz)]), 24,
@@ -392,7 +405,7 @@ def self_test():
     expect("a gzip payload is decompressed", file_out.get("pe32.efi") == pe32)
 
     # a Tiano GUID_DEFINED section is reported as unsupported, not silently dropped
-    tiano = uuid.UUID(TIANO_CUSTOM_DECOMPRESS_GUID).bytes_le + struct.pack("<HH", 20, 0) + b"\x00" * 16
+    tiano = uuid.UUID(TIANO_CUSTOM_DECOMPRESS_GUID).bytes_le + struct.pack("<HH", 24, 0) + b"\x00" * 16
     report2 = Report()
     walk_sections(make_ffs("11111111-2222-3333-4444-555555555555", 0x0B,
                            [make_section(SECTION_GUID_DEFINED, tiano)]), 24,

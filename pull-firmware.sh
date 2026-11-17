@@ -6,7 +6,7 @@
 # (some ROMs mount them for the system user only), use pull-firmware-root.sh, which stages the files
 # under root and removes the staging directory again.
 set -e
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")"   # this is a standalone device repository, not devices/<name> in the common tree
 
 pull() { # DIR SOURCE...  (a missing file is told, not fatal)
 	local dir=$1; shift

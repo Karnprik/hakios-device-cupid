@@ -5,4 +5,8 @@ fw-*/
 prebuilt/device-tree.dtb
 # the phone's own firmware volume: pulled, never committed
 uefi.img
+uefi_a.img
+xbl_a.img
 fw-stage/
+# scratch from unpacking the phone's firmware volume
+work/

@@ -7,27 +7,30 @@
 #
 # Needs the phone in Android with adb and a root that answers `su -c` (Magisk, KernelSU).
 set -e
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")"   # this is a standalone device repository, not devices/<name> in the common tree
 S=/data/local/tmp/cupid-fw
 
 adb get-state >/dev/null
 
 # the copy itself, under root. The firmware names are the phone's own; the globs take what is there.
-adb shell "su -c 'sh -c \"S=$S; rm -rf \$S; mkdir -p \$S/gpu \$S/wifi \$S/audio \$S/modem \$S/haptic \$S/camera
-cp /vendor/firmware/gmu_gen70000.bin /vendor/firmware/a730_sqe.fw /vendor/firmware/a730_zap.* \$S/gpu/ 2>/dev/null
-cp /vendor/firmware_mnt/image/wlan* /vendor/firmware_mnt/image/wcn* /vendor/firmware_mnt/image/wpss* \$S/wifi/ 2>/dev/null
-cp /vendor/firmware_mnt/image/adsp* \$S/audio/ 2>/dev/null
-cp /vendor/firmware_mnt/image/modem* \$S/modem/ 2>/dev/null
-cp /vendor/firmware/aw8697_haptic.bin \$S/haptic/ 2>/dev/null
-cp /vendor/lib64/camera/com.qti.sensormodule.*.bin \$S/camera/ 2>/dev/null
-chmod -R a+rX \$S\"'"
+# The paths are written out in full: adb -> su -> sh is three levels of quoting, and a $S held in a
+# variable here would be expanded by the wrong shell.
+adb shell "su -c 'mkdir -p $S/gpu $S/wifi $S/audio $S/modem $S/haptic $S/camera'"
+adb shell "su -c 'cp /vendor/firmware/gmu_gen70000.bin /vendor/firmware/a730_sqe.fw /vendor/firmware/a730_zap.* $S/gpu/ 2>/dev/null || true'"
+adb shell "su -c 'cp /vendor/firmware_mnt/image/qca6490/* /vendor/firmware_mnt/image/bdwlan.* /vendor/firmware/wlan/qca_cld/qca6490/* $S/wifi/ 2>/dev/null || true'"
+adb shell "su -c 'cp /vendor/firmware_mnt/image/adsp* $S/audio/ 2>/dev/null || true'"
+adb shell "su -c 'cp /vendor/firmware_mnt/image/modem* $S/modem/ 2>/dev/null || true'"
+adb shell "su -c 'cp /vendor/firmware/aw8697_haptic.bin $S/haptic/ 2>/dev/null || true'"
+adb shell "su -c 'cp /vendor/lib64/camera/com.qti.sensormodule.*.bin $S/camera/ 2>/dev/null || true'"
+adb shell "su -c 'chmod -R a+rX $S'"
 
-# the UEFI firmware volume, which holds the vendor DXE drivers. dd off the block device, read-only,
-# into the same staging directory; the first partition name that exists wins.
-for part in xbl_a xbl_b uefi_a uefi_b xbl uefi; do
-	if adb shell "su -c '[ -e /dev/block/by-name/$part ]'" 2>/dev/null | grep -q .; then
-		adb shell "su -c 'dd if=/dev/block/by-name/$part of=$S/uefi.img bs=4096 status=none'" >/dev/null 2>&1 && break
-	fi
+# the UEFI firmware volume, which holds the vendor DXE drivers. dd off the block devices, read-only,
+# into the same staging directory. This phone has a dedicated uefi_a (ELF64, the FV) as well as
+# xbl_a (ELF32, the loader); take both, since the drivers may live in either.
+for part in uefi_a xbl_a; do
+	out="$part.img"
+	adb shell "su -c 'dd if=/dev/block/by-name/$part of=$S/$out bs=4096 status=none'" >/dev/null 2>&1 \
+		|| echo "pull-firmware-root.sh: $part: not readable"
 done
 
 rm -rf fw-stage
@@ -38,22 +41,27 @@ rm -rf fw-gpu fw-wifi fw-audio fw-modem fw-haptic fw-camera
 for d in gpu wifi audio modem haptic camera; do
 	[ -d "fw-stage/$d" ] && mv "fw-stage/$d" "fw-$d"
 done
-if [ -s fw-stage/uefi.img ]; then
-	mv fw-stage/uefi.img uefi.img
-	echo "pull-firmware-root.sh: uefi.img: $(wc -c < uefi.img | tr -d ' ') bytes"
-else
-	echo "pull-firmware-root.sh: uefi.img: not found; none of the xbl/uefi partition names matched"
-fi
+for img in uefi_a.img xbl_a.img; do
+	if [ -s "fw-stage/$img" ]; then
+		mv "fw-stage/$img" "$img"
+		echo "pull-firmware-root.sh: $img: $(wc -c < "$img" | tr -d ' ') bytes"
+	else
+		echo "pull-firmware-root.sh: $img: not found"
+	fi
+done
 rm -rf fw-stage
 
 for d in fw-gpu fw-wifi fw-audio fw-modem fw-haptic fw-camera; do
 	echo "pull-firmware-root.sh: $d: $(ls -1 "$d" 2>/dev/null | wc -l | tr -d ' ') files"
 done
 
-# the phone's own device tree, which only root can read
+# the phone's own device tree, which only root can read. Stage it and adb pull: `adb shell cat`
+# converts LF to CRLF on Windows and corrupts the binary.
 mkdir -p prebuilt
-adb shell "su -c 'cat /sys/firmware/fdt'" > prebuilt/device-tree.dtb 2>/dev/null \
+adb shell 'su -c "cp /sys/firmware/fdt /data/local/tmp/cupid-fdt && chmod a+r /data/local/tmp/cupid-fdt"' >/dev/null 2>&1 \
+	&& adb pull /data/local/tmp/cupid-fdt prebuilt/device-tree.dtb >/dev/null 2>&1 \
 	&& [ -s prebuilt/device-tree.dtb ] \
 	|| echo "pull-firmware-root.sh: /sys/firmware/fdt: not readable; the platform's own DTB stays"
+adb shell 'su -c "rm -f /data/local/tmp/cupid-fdt"' >/dev/null 2>&1 || true
 
 echo "pull-firmware-root.sh: done; the staging directory is removed"
