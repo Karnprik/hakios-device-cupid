@@ -184,6 +184,7 @@ jobs:
         id: vendor
         env:
           VENDOR_BINARIES_URL: ${{ secrets.VENDOR_BINARIES_URL }}
+          VENDOR_BINARIES_TOKEN: ${{ secrets.VENDOR_BINARIES_TOKEN }}
         run: |
           set -euo pipefail
           url="${{ inputs.vendor_binaries_url }}"
@@ -192,7 +193,11 @@ jobs:
             echo "Downloading the vendor UEFI drivers from the supplied URL"
             tmp="$RUNNER_TEMP/vendor-cupid"
             rm -rf "$tmp" && mkdir -p "$tmp"
-            curl -fsSL --retry 3 -o "$tmp/vendor.tar.gz" "$url"
+            curl_args=(-fsSL --retry 3 -o "$tmp/vendor.tar.gz")
+            if [ -n "${VENDOR_BINARIES_TOKEN:-}" ]; then
+              curl_args+=(-H "Authorization: token $VENDOR_BINARIES_TOKEN")
+            fi
+            curl "${curl_args[@]}" "$url"
             want="${{ inputs.vendor_binaries_sha256 }}"
             if [ -n "$want" ]; then
               got=$(sha256sum "$tmp/vendor.tar.gz" | cut -d' ' -f1)
