@@ -1,4 +1,6 @@
 # what tools/metal-run.sh gives this phone (docs/porting/index.md): its big core and cores, its panel's rate,
 # how many threads copy frames, how often the touch screen is read. A line of boot-arguments; # is a comment.
 # fb_intf=<physical> as well, if its SoC's display interface is known: frames are then written behind the scan.
-fb_hz=60 fb_threads=3
+# fb_hz=120: this phone's own device tree points at a Visionox R66451 AMOLED panel whose only
+# timing is 120 Hz (docs/panel-facts.txt); the reference phone's 60 Hz was carried over here.
+fb_hz=120 fb_threads=3

@@ -81,6 +81,11 @@ jobs:
             --dtb uefi/files/Resources/DTBs/cupid.dtb \
             --check soc.args
 
+      - name: Check the panel the device tree actually names
+        run: |
+          set -euo pipefail
+          python3 tools/panel-facts.py             --dtb uefi/files/Resources/DTBs/cupid.dtb             --check docs/panel-facts.txt
+
       - name: Check the device facts against the device tree
         run: |
           set -euo pipefail
