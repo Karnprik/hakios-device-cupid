@@ -227,3 +227,36 @@ The vendor log is always the first place to look: `logfs` (`/dev/block/by-name/l
 `UefiLog*.txt`, one per boot in cycling slots) read from a root recovery with
 `adb exec-out 'dd if=/dev/block/by-name/logfs bs=4096 count=2048 2>/dev/null' > logfs.img`.
 `logdump` (HakiOS's own log partition) is all zeros until the loader writes to it.
+
+## 11. The U-Boot path: the documented way to text on the panel
+
+`docs/u-boot.md` in the common repository is the answer to "no UART, and the screen must say
+something": ABL starts **Das U-Boot** from RAM, U-Boot writes its console to the panel and answers
+`fastboot oem console` with the record of it. That record is machine-readable evidence, and the only
+kind this port can collect without a human looking at the phone.
+
+What this device needs for it, all measured here:
+
+| Fact | Value | Where it comes from |
+|---|---|---|
+| framebuffer ABL leaves live | `0xB8000000`, 1080x2400, stride 4320 | `/reserved-memory/splash_region` in the phone's own tree, and the paint that stayed on the panel |
+| payload window | `0xB0000000` + 64 MiB | the waipio family's measured base; `0xF0000000` is inside TZ apps |
+| boot-image header | v4, `os_version`/`os_patch_level` 0 | anything else and ABL answers OKAY then boots the slot |
+| device tree | the phone's own DTB plus `simple-framebuffer` and `hakios-payload` | an Android tree has no framebuffer node, so a running U-Boot paints nothing (`tools/uboot-dts.py`) |
+
+`u-boot/files/configs/hakios_cupid_defconfig` + `u-boot/files/board/qualcomm/hakios-cupid.env` are
+this device's; `uefi/u-boot/hakios.patch`, `cmd/hakios.c` and the Qualcomm USB device protocol come
+from `hakios-uefi` at the revision `devices/manifest.conf` pins. Build and verification:
+
+```sh
+gh workflow run build-uboot.yml -R hrihq/hakios-device-cupid --ref fix/waipio-payload-base \
+   -f payload_base=0xB0000000UL          # -> cupid-uboot artifact: hakios-u-boot.img
+verify/uboot_boot.sh                     # fastboot boot, then `fastboot oem console`
+```
+
+Status: the image builds and was checked against the header of an image ABL has demonstrably
+executed (same `ANDROID!` magic, kernel at `0x1000`, header v4, `os_version` 0; `u-boot.bin` carries
+the `ARM\x64` header and prints `U-Boot 2026.07-dirty`; the appended tree carries
+`simple-framebuffer`, `hakios-payload`, and USB in peripheral mode). **It has not been booted yet** —
+a built image is not a boot, so this section stays at "written, not run" until the panel or the
+console record says otherwise.
