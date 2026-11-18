@@ -59,6 +59,7 @@ jobs:
           python3 - <<'PY'
           import json, os, subprocess, zipfile
           T = os.environ["GH_TOKEN"]
+          os.makedirs("artifacts", exist_ok=True)
           base = "https://api.github.com/repos/hrihq/hakios-device-cupid/actions/runs"
           def dl(run, name, out):
               arts = json.loads(subprocess.check_output([
