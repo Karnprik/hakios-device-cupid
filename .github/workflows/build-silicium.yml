@@ -7,6 +7,12 @@ name: build-silicium-cupid
 
 on:
   workflow_dispatch:
+    inputs:
+      shim_diag:
+        description: "BootShim diagnostic define (e.g. -DCUPID_SHIM_BEACON: paints the splash buffer and resets; empty = normal image)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -99,6 +105,8 @@ jobs:
           # whose patch is applied only to the full tree in build-uefi.yml.
           ( cd "$M" && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/uefi/bootshim-payload-copy.patch" )
           [ "$(grep -c 'PAYLOAD_BASE' "$M/BootShim/BootShim.S")" = 2 ]
+          # Bring-up diagnostic, off unless shim_diag defines it: proves the shim ran without a serial port.
+          ( cd "$M" && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/uefi/bootshim-diagnostic.patch" )
           printf 'H' > "$M/Resources/ramdisk"
           cp tools/mkxnuimg-cupid.py common/mkxnuimg.py
           ls -l "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
@@ -111,6 +119,8 @@ jobs:
 
       - name: Pack the payload and the boot image
         working-directory: common
+        env:
+          SHIM_CFLAGS: ${{ inputs.shim_diag }}
         run: |
           set -euo pipefail
           python3 xnuloader/mkpayload.py --usb -o payload.bin \
