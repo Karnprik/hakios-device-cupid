@@ -260,3 +260,30 @@ the `ARM\x64` header and prints `U-Boot 2026.07-dirty`; the appended tree carrie
 `simple-framebuffer`, `hakios-payload`, and USB in peripheral mode). **It has not been booted yet** —
 a built image is not a boot, so this section stays at "written, not run" until the panel or the
 console record says otherwise.
+
+## 12. U-Boot runs on cupid: the first boot that printed anything
+
+Observed on the phone, 2026-11-18: `fastboot boot` of `hakios-u-boot.img` reaches U-Boot, which paints
+its console on the panel and prints text. Nothing was flashed.
+
+What was wrong until then, in order of how much it mattered:
+
+1. **U-Boot's control FDT was the phone's Android device tree** (`EXT_DTB`). That tree is a kernel's
+   view and has no `simple-framebuffer` node, so a running U-Boot had nowhere to write and died in
+   the first init calls without a word. `docs/u-boot.md` says it plainly: a device tree of its own,
+   on top of the upstream SoC's. `u-boot/files/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts`
+   is that tree (framebuffer at cont_splash_region, payload window at 0xB0000000, keys, UFS, USB as
+   a device, the phone's own carve-outs).
+2. **Payload base 0xF0000000** - inside the trusted apps' carve-out on this SoC family.
+3. **Boot image header v1 with os_version 13** - ABL answers OKAY and starts the slot instead.
+
+The diagnostic path that found it, for the next device: paint the framebuffer from the boot shim
+(proves ABL ran our image), from `_main` in assembly, from `board_init_f` in C, and then one band per
+early init call - 12 x 200 px with a distinct colour each, so one photograph reads out how far the
+firmware got. Two traps met on the way: `board_init_f()` runs **before** U-Boot clears `.bss`, so a
+`static` counter there starts as garbage (use `__COUNTER__`); and an early paint loop must not rely on
+anything the C environment has not set up yet.
+
+Still open: U-Boot's own USB gadget did not enumerate on the host after the banner, so the loader
+(`hakios load`) has not been started yet and `fastboot oem console` has nothing to answer with. That
+is the next step, and it is independent of the console, which works.
