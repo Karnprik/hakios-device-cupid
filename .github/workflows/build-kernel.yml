@@ -53,6 +53,7 @@ jobs:
       - name: Install theos with its Linux toolchain
         run: |
           set -euo pipefail
+          export THEOS="$HOME/theos"
           bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
           echo "THEOS=$THEOS"
           [ -x "$THEOS/toolchain/linux/iphone/bin/ld" ] || { echo "::error ::theos cctools missing"; exit 1; }
