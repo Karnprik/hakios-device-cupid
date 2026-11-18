@@ -1,0 +1,128 @@
+name: build-kernel-cupid
+
+# Build the XNU kernel for the Xiaomi 12 from the common repository at a pinned revision, with this
+# device repository linked in as devices/cupid. A green run means the kernel links; it is not a boot
+# test. The first boot can use the common repository's prebuilt kernel instead (docs/port-pkg110.md).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [adreno-730-cupid]
+    paths:
+      - "configs/**"
+      - "soc/**"
+      - "device.conf"
+      - "soc.args"
+      - "metal.args"
+      - ".github/workflows/build-kernel.yml"
+
+permissions:
+  contents: read
+
+env:
+  COMMON_REV: 63fc2b4633bac3af8e57dadab9f5a8d4cb940438
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout the device repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check disk space
+        run: |
+          set -euo pipefail
+          free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          echo "Free space on /: ${free_gb} GB"
+          [ "$free_gb" -ge 16 ] || { echo "::error ::Need at least 16 GB for XNU and its dependencies"; exit 1; }
+
+      - name: Install the host toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git curl ca-certificates xz-utils unzip make \
+            clang llvm lld flex bison m4 perl python3 python3-pip \
+            autoconf automake libtool libtool-bin pkg-config rsync cpio \
+            zlib1g-dev libssl-dev libxml2-dev libncurses-dev libtirpc-dev gawk bc file patch
+          echo "apt: done"
+
+      - name: Install theos with its Linux toolchain
+        run: |
+          set -euo pipefail
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=$THEOS"
+          [ -x "$THEOS/toolchain/linux/iphone/bin/ld" ] || { echo "::error ::theos cctools missing"; exit 1; }
+          find "$THEOS/sdks" -maxdepth 2 -name "iPhoneOS16.5.sdk" -print -quit | grep -q . \
+            || { echo "::error ::iPhoneOS16.5.sdk missing"; exit 1; }
+
+      - name: Clone the common repository and link this device
+        run: |
+          set -euo pipefail
+          git init -q common
+          git -C common remote add origin https://github.com/oosexgang/hakios-xnu-kernel.git
+          git -C common fetch --depth 1 origin "$COMMON_REV"
+          git -C common checkout -q FETCH_HEAD
+          rm -rf common/devices/cupid
+          ln -s "$GITHUB_WORKSPACE" common/devices/cupid
+          echo "common at $(git -C common rev-parse HEAD)"
+
+      - name: Configure for cupid
+        working-directory: common
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          make cupid_defconfig
+          make config
+
+      - name: Fetch and build the kernel dependencies
+        working-directory: common
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          xnu-deps/setup.sh --stage1
+
+      - name: Apply HakiOS's work to Apple's XNU
+        working-directory: common
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          [ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
+          xnu-deps/setup.sh --stage2
+
+      - name: Build XNU
+        working-directory: common
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          tools/make-kernel.sh -j4 2>&1 | tee kernel-build.log
+
+      - name: Upload the kernel
+        if: success()
+        run: |
+          set -euo pipefail
+          K=common/xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          [ -s "$K" ] || { echo "::error ::no kernel at $K"; exit 1; }
+          cp "$K" cupid-kernel
+          sha256sum cupid-kernel
+
+      - name: Upload artifacts
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: cupid-kernel
+          path: |
+            cupid-kernel
+            common/kernel-build.log
+          if-no-files-found: error
+
+      - name: Report
+        if: always()
+        run: |
+          echo "## cupid kernel" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- common repository: \`$COMMON_REV\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- a linked kernel is not a boot test; no phone was used" >> "$GITHUB_STEP_SUMMARY"
