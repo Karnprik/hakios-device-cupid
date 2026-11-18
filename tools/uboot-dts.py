@@ -42,8 +42,10 @@ def block(fb, width, height, payload, payload_size):
 	}};
 }};
 
-&reserved_memory {{
-	hakios_payload: hakios-payload@{payload:x} {{
+/* a path reference, not a label: dtc -I dtb -O dts drops every label, so &reserved_memory does not
+   exist in the phone's decompiled tree. 0xB0000000 is the waipio family's measured payload base. */
+&{{/reserved-memory}} {{
+	hakios-payload@{payload:x} {{
 		reg = <0x0 0x{payload:x} 0x0 0x{payload_size:x}>;
 		no-map;
 	}};
