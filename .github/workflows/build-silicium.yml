@@ -103,7 +103,7 @@ jobs:
           python3 xnuloader/mkpayload.py --usb -o payload.bin \
             loader.efi=../artifacts/kernel/cupid-loader.efi \
             kernel=../artifacts/kernel/cupid-kernel \
-            ramdisk=prebuilt/userland/hello --cmdline "-v"
+            ramdisk=prebuilt/userland/hello --cmdline=-v
           python3 mkxnuimg.py -d cupid -p payload.bin -o xnu-cupid.img
           sha256sum xnu-cupid.img
 
