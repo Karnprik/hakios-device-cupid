@@ -50,7 +50,7 @@ jobs:
           mkdir -p "$dir"
           base="https://raw.githubusercontent.com/torvalds/linux/$LINUX_REV/drivers/gpu/drm/msm/registers/adreno"
           for f in a6xx.xml a6xx_gmu.xml adreno_common.xml; do
-            curl -fsSL "$base/$f" -o "$dir/$f"
+            curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 "$base/$f" -o "$dir/$f"
             echo "$f $(wc -c < "$dir/$f") bytes"
           done
           echo "dir=$dir" >> "$GITHUB_ENV"

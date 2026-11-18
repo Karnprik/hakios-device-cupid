@@ -14,3 +14,8 @@ append_dtb         = true
 
 [boot_image]
 header_version = 4
+[vendor_drivers]
+# "none" = blob-free: the DXE list carries no Binaries/cupid/ entries. The phone's own DXE set
+# stops this SoC family from booting (ClockDxe halts the panel scanout, PmicDxe aborts on SPMI),
+# so the platform runs on the SoC package alone until a single driver is proven here.
+mode = "none"
