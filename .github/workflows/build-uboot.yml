@@ -53,9 +53,10 @@ jobs:
           # cost 15-20 minutes a run, and apt-get update is not needed either - the image ships its
           # package lists. Anything that turns out to be absent is named below instead of guessed at.
           have() { command -v "$1" >/dev/null || { echo "::error ::$1 is missing from the runner image"; exit 1; }; }
-          if ! command -v aarch64-linux-gnu-gcc >/dev/null; then
-            sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
-          fi
+          need=()
+          command -v aarch64-linux-gnu-gcc >/dev/null || need+=(gcc-aarch64-linux-gnu)
+          command -v dtc >/dev/null || need+=(device-tree-compiler)	# not in the runner image
+          [ ${#need[@]} -eq 0 ] || sudo apt-get install -y --no-install-recommends "${need[@]}"
           aarch64-linux-gnu-gcc --version | head -1
           for t in make dtc bison flex swig bc lz4 gzip python3; do have "$t"; done
 
