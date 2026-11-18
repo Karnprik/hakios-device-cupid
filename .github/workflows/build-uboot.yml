@@ -61,14 +61,27 @@ jobs:
           cp uefi/files/Resources/DTBs/cupid.dtb common/devices/cupid/prebuilt/device-tree.dtb
           file common/devices/cupid/prebuilt/device-tree.dtb
 
+      - name: Clone HakiOS's UEFI
+        run: |
+          set -euo pipefail
+          git init -q hakios-uefi
+          git -C hakios-uefi remote add origin https://github.com/oosexgang/hakios-uefi.git
+          git -C hakios-uefi fetch --depth 1 origin 1c6522893266157506c767e2ca427053ed3634a8
+          git -C hakios-uefi checkout -q FETCH_HEAD
+          mkdir -p devices
+          ln -s "$GITHUB_WORKSPACE" devices/cupid
+          echo "hakios-uefi at $(git -C hakios-uefi rev-parse HEAD)"
+
       - name: Assemble HakiOS's U-Boot with the cupid files
-        run: common/uefi/u-boot/apply.sh cupid
+        run: |
+          "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
       - name: Build U-Boot with cupid's own device tree
         env:
           EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
           CROSS_COMPILE: aarch64-linux-gnu-
-        run: common/uefi/u-boot/build.sh cupid
+        run: |
+          "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
 
       - name: Pack a boot image with no payload
         run: |
@@ -83,8 +96,8 @@ jobs:
           name: cupid-uboot
           path: |
             hakios-u-boot.img
-            common/u-boot/build-cupid/u-boot.bin
-            common/u-boot/build-cupid/.config
+            u-boot/build-cupid/u-boot.bin
+            u-boot/build-cupid/.config
           if-no-files-found: error
           retention-days: 30
 
@@ -94,7 +107,7 @@ jobs:
           echo "## cupid U-Boot" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- common repository: \`$COMMON_REV\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- U-Boot: \`$(cat common/uefi/u-boot/BASE 2>/dev/null || echo unknown)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- U-Boot: \`$(cat hakios-uefi/u-boot/BASE 2>/dev/null || echo unknown)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- device tree: the phone's own \`uefi/files/Resources/DTBs/cupid.dtb\` (EXT_DTB)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "A built image is not a boot test. Do not flash it: \`fastboot boot\` only." >> "$GITHUB_STEP_SUMMARY"
