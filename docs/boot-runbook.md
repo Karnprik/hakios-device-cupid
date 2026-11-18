@@ -144,6 +144,16 @@ A proven same-family port (`cotunjr/hakios-mayfly`, Xiaomi 12S / SM8475) measure
 5. `tools/payload-base-check.py`, run in `check-device` and before packing, so the five copies
    cannot drift again.
 
+### Second cause: the shim never copied the payload
+
+`build-silicium.yml` assembles its Mu-Silicium tree by downloading `BootShim.S` and `Makefile`
+straight from Project-Silicium, so HakiOS's `hakios.patch` hunk that adds the `XNUP` payload copy
+(`#ifdef PAYLOAD_BASE`, in `hakios-uefi/hakios.patch`) was never applied. The rebuilt image's shim
+was 112 bytes with no copy loop, so `0xB0000000` held nothing no matter what the payload base said.
+The workflow now applies that one hunk (`git apply --include='BootShim/BootShim.S'`) and asserts,
+after packing, that the shim contains `movz x5, #0xb000, lsl #16` and that an `XNUP` payload follows
+the FD.
+
 The images must be rebuilt after this change. A green rebuild is still not a boot; only a loader
 banner or `fastboot getvar product: xnuloader` on the phone is proof.
 

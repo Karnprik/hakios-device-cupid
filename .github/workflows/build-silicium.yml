@@ -92,6 +92,11 @@ jobs:
           cp uefi/files/Resources/DTBs/cupid.dtb "$M/Resources/DTBs/cupid.dtb"
           curl -fsSL -o "$M/Resources/Scripts/mkbootimg.py" \
             https://raw.githubusercontent.com/oosexgang/hakios-sm7325/af52dfba33f91340bde68dbbe238ae583f9fd472/prebuilt/mkbootimg.py
+          # HakiOS's hakios.patch adds the "XNUP" payload copy to BootShim.S (guarded by
+          # #ifdef PAYLOAD_BASE). The raw upstream file has no such loop, so without this the
+          # payload is never moved to PAYLOAD_BASE and the firmware finds nothing at 0xB0000000.
+          ( cd "$M" && git apply --include='BootShim/BootShim.S' "$GITHUB_WORKSPACE/hakios-uefi/hakios.patch" )
+          grep -c 'PAYLOAD_BASE' "$M/BootShim/BootShim.S"
           printf 'H' > "$M/Resources/ramdisk"
           cp tools/mkxnuimg-cupid.py common/mkxnuimg.py
           ls -l "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
@@ -112,6 +117,24 @@ jobs:
             ramdisk=prebuilt/userland/hello --cmdline=-v
           python3 mkxnuimg.py -d cupid -p payload.bin -o xnu-cupid.img
           sha256sum xnu-cupid.img
+
+      - name: Verify the shim places the payload at the waipio base
+        working-directory: common
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, struct, zlib
+          img = pathlib.Path('xnu-cupid.img').read_bytes()
+          size = struct.unpack_from('<I', img, 8)[0]
+          d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+          blob = d.decompress(img[4096:4096 + size])
+          fd = pathlib.Path('Mu-Silicium/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd').read_bytes()
+          shim = blob[:blob.find(fd)]
+          want = (0xD2800000 | (0xB000 << 5) | (1 << 21) | 5).to_bytes(4, 'little')  # movz x5, #0xb000, lsl #16
+          assert want in shim, 'the shim has no payload copy to 0xB0000000: hakios.patch was not applied'
+          assert blob.find(fd) + len(fd) + 4 <= len(blob) and blob[blob.find(fd) + len(fd):blob.find(fd) + len(fd) + 4] == b'XNUP', 'no XNUP payload after the FD'
+          print(f'shim {len(shim)} bytes, payload copy to 0xB0000000 present, XNUP payload present')
+          PY
 
       - name: Upload the image
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
