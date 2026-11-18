@@ -91,3 +91,5 @@
   # Waipio: 0xF0000000 is inside the TZ apps carve-out (0xEA000000-0xF1400000).
   # Keep in sync with build-kernel.yml, XnuLoader.h and tools/mkxnuimg-cupid.py.
   *_*_*_CC_FLAGS = -DXNU_PAYLOAD_BASE=0xB0000000ULL
+  # Experiment branch only: SEC beacons (red at the FD entry, magenta after PlatformInitialize).
+  *_*_*_CC_FLAGS = -DCUPID_SEC_BEACON
