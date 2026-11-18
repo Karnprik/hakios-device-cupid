@@ -103,10 +103,11 @@ jobs:
         if: inputs.beacon != ''
         run: |
           set -euo pipefail
-          # Two colours, one boot: magenta in the top quarter as soon as U-Boot's assembly entry runs,
-          # cyan over the whole panel when its first C function runs. Cyan means both ran and the
-          # problem is further on (video, device model); magenta alone means the C world never
-          # started; neither means the image never executed at all.
+          # Three answers from one boot:
+          #   magenta in the top quarter - U-Boot's assembly entry (_main) ran
+          #   cyan over the whole panel  - its first C function (board_init_f) ran
+          #   then one green band of 100 px per early init call, top to bottom: the number of bands is the
+          #   index of the call that never returned, and the table printed below names it.
           python3 - <<'PY'
           import re
           p = "uboot-tree/arch/arm/lib/crt0_64.S"
@@ -114,7 +115,7 @@ jobs:
           m = re.search(r"\nENTRY\(_main\)\n", s)
           assert m, "no ENTRY(_main) in crt0_64.S"
           asm = (
-              "\t/* cupid bring-up: paint the top quarter of the live framebuffer magenta */\n"
+              "\t/* cupid bring-up: top quarter magenta as soon as the assembly entry runs */\n"
               "\tldr\tx7, =0xB8000000\n"
               "\tldr\tx8, =(1080 * 600)\n"
               "\tmovz\tw9, #0x00ff\n"
@@ -124,20 +125,61 @@ jobs:
               "\tb.ne\t1b\n"
               "\tdsb\tsy\n"
           )
-          s = s[:m.end()] + asm + s[m.end():]
-          open(p, "w").write(s)
+          open(p, "w").write(s[:m.end()] + asm + s[m.end():])
 
           p = "uboot-tree/common/board_f.c"
           s = open(p).read()
           a = "void board_init_f(ulong boot_flags)\n{\n"
           assert s.count(a) == 1, "unexpected board_init_f"
-          c = ("\t/* cupid bring-up: the first C code U-Boot runs paints the whole panel cyan */\n"
-               "\t{\n\t\tvolatile uint32_t *f = (volatile uint32_t *)0xB8000000UL;\n"
-               "\t\tunsigned i;\n"
-               "\t\tfor (i = 0; i < 1080u * 2400u; i++)\n\t\t\tf[i] = 0xFF00FFFFu;\n\t}\n")
-          open(p, "w").write(s.replace(a, a + c))
-          print("beacons in: crt0_64.S (magenta top quarter) and board_f.c (cyan)")
+          cyan = (
+              "\t/* cupid bring-up: the first C code U-Boot runs paints the panel cyan */\n"
+              "\t{\n"
+              "\t\tvolatile uint32_t *f = (volatile uint32_t *)0xB8000000UL;\n"
+              "\t\tunsigned i;\n"
+              "\t\tfor (i = 0; i < 1080u * 2400u; i++)\n"
+              "\t\t\tf[i] = 0xFF00FFFFu;\n"
+              "\t}\n"
+          )
+          s = s.replace(a, a + cyan)
+
+          b = "static void initcall_run_f(void)"
+          assert s.count(b) == 1
+          bands = (
+              "/* ---- cupid bring-up: a green band per early init call, 100 px each, top to bottom ---- */\n"
+              "static void cupid_band(void)\n"
+              "{\n"
+              "\tstatic int cupid_n;\n"
+              "\tvolatile uint32_t *fb = (volatile uint32_t *)0xB8000000UL;\n"
+              "\tunsigned y, x;\n"
+              "\n"
+              "\tif (cupid_n >= 24)\n"
+              "\t\treturn;\n"
+              "\tfor (y = (unsigned)cupid_n * 100u; y < (unsigned)(cupid_n + 1) * 100u; y++)\n"
+              "\t\tfor (x = 0; x < 1080u; x++)\n"
+              "\t\t\tfb[y * 1080u + x] = 0xFF00FF00u;\n"
+              "\t__asm__ volatile(\"dsb sy\" ::: \"memory\");\n"
+              "\tcupid_n++;\n"
+              "}\n"
+              "\n"
+              "#undef INITCALL\n"
+              "#define INITCALL(_call) \\\n"
+              "\tdo { \\\n"
+              "\t\tcupid_band(); \\\n"
+              "\t\tif (_call()) { \\\n"
+              "\t\t\tprintf(\"%s(): initcall %s() failed\\n\", __func__, #_call); \\\n"
+              "\t\t\thang(); \\\n"
+              "\t\t} \\\n"
+              "\t} while (0)\n"
+              "/* ---- end cupid bring-up ---- */\n"
+              "\n"
+          )
+          s = s.replace(b, bands + b)
+          open(p, "w").write(s)
+          print("beacons in: crt0_64.S (magenta), board_f.c (cyan + one band per INITCALL)")
           PY
+          echo "band index -> early init call"
+          awk '/static void initcall_run_f\(void\)/{f=1} f && /INITCALL\(/{print} f && /^}/{exit}' \
+            uboot-tree/common/board_f.c | grep -o 'INITCALL([a-z0-9_]*)' | nl -v0 -w2 -s' = '
 
       - name: Build U-Boot with cupid's own device tree
         env:
