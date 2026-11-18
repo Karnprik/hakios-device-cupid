@@ -3,6 +3,8 @@
 #include "qcom_defconfig"
 
 CONFIG_ARM=y
+# The phone's own DTB is ~780 KiB; the default 1.5 MiB offset fails init_sp_bss_offset_check.
+CONFIG_SYS_INIT_SP_BSS_OFFSET=0x600000
 CONFIG_DEFAULT_DEVICE_TREE="qcom/sm8450-xiaomi-cupid"
 CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="board/qualcomm/hakios-cupid.env"
 CONFIG_CMD_HAKIOS=y
