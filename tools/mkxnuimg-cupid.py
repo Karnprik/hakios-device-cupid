@@ -33,7 +33,7 @@ DEVICES = {
     'mayfly': dict(fd_base=0xA7100000, fd_size=0x300000, payload_base=0xB0000000, header=4, shim_cflags='-DHAKIOS_GH_WDT_OFF',
                    image_size_covers_payload=True),
     # Xiaomi 12 (cupid, SM8450): same waipio family as mayfly; FD from cupidPkg is built at 0xA7000000.
-    'cupid': dict(fd_base=0xA7000000, fd_size=0x300000, payload_base=0xB0000000, header=4, shim_cflags='-DHAKIOS_GH_WDT_OFF',
+    'cupid': dict(fd_base=0xA7100000, fd_size=0x300000, payload_base=0xB0000000, header=4, shim_cflags='-DHAKIOS_GH_WDT_OFF',
                   image_size_covers_payload=True, os_version='13', os_patch_level='2026-11-15'),
 }
 

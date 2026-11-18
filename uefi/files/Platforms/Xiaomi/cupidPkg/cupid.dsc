@@ -36,7 +36,7 @@
   #
   # UEFI Stack  (the provisional HakiOS region: see uefi/README.md here)
   #
-  gArmPlatformTokenSpaceGuid.PcdCPUCoresStackBase|0xA340D000
+  gArmPlatformTokenSpaceGuid.PcdCPUCoresStackBase|0xA760D000
   gArmPlatformTokenSpaceGuid.PcdCPUCorePrimaryStackSize|0x40000
 
   #
