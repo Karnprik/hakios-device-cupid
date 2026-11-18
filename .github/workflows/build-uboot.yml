@@ -221,7 +221,9 @@ jobs:
           python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
             loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
             ramdisk=common/prebuilt/userland/hello --cmdline=-v
-          python3 common/tools/mkubootimg.py -p payload.bin -c payload.hkub
+          python3 common/tools/mkubootimg.py -d cupid \
+            -u "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
+            -p payload.bin -c payload.hkub
           ls -l payload.bin payload.hkub
 
       - name: Pack a boot image with no payload
