@@ -21,6 +21,10 @@ L=${L:-xnuloader/loader.efi}
 RD=${XL_RAMDISK:-userland/hello}
 SECS=${XL_SECS:-8}
 
+# git-bash cannot resolve a native "C:/..." entry in PATH; convert to /c/...
+case "$PT" in
+  [A-Za-z]:/*) PT="/$(printf '%s' "${PT%%:*}" | tr 'A-Z' 'a-z')${PT#*:}" ;;
+esac
 export PATH="$PATH:$PT"
 cd "$COMMON"
 
