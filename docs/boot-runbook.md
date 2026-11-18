@@ -133,3 +133,16 @@ links and the platform compiles; neither is a boot test. A serial log is needed 
 - GPU acceleration, display driver, touch, audio, Wi-Fi/BT, camera, battery.
 - First boot is expected to use the UEFI framebuffer plus software rendering, like `renoir`.
 - `cupid.config` has all phone drivers off. Runtime driver work comes after the first boot.
+
+## 9. U-Boot path (no UART needed)
+
+The site's U-Boot guide (docs/u-boot.md in the common repository) is an alternative boot chain:
+ABL fastboot-boots HakiOS's U-Boot, and U-Boot starts the loader from RAM. U-Boot writes its
+log to the phone screen and answers `fastboot oem console`, so no serial cable is needed.
+
+- Branch `uboot-cupid` builds it in CI: `.github/workflows/build-uboot.yml`.
+- Run 44264429537 is green; artifact `cupid-uboot` holds `hakios-u-boot.img` and `u-boot.bin`.
+- The phone's own `uefi/files/Resources/DTBs/cupid.dtb` is converted to a DTS with dtc and used
+  as U-Boot's default tree. `CONFIG_SYS_INIT_SP_BSS_OFFSET=0x600000` is required: the default
+  1.5 MiB fails `init_sp_bss_offset_check` with this ~780 KiB tree.
+- A built image is still not a boot test. Try it with `fastboot boot` only; never flash.
