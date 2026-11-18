@@ -74,12 +74,13 @@ jobs:
 
       - name: Assemble HakiOS's U-Boot with the cupid files
         run: |
-          "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
+          U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
       - name: Build U-Boot with cupid's own device tree
         env:
           EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
           CROSS_COMPILE: aarch64-linux-gnu-
+          U_BOOT: ${{ github.workspace }}/uboot-tree
         run: |
           "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
 
@@ -87,7 +88,8 @@ jobs:
         run: |
           set -euo pipefail
           cd common
-          tools/mkubootimg.py -d cupid -o "$GITHUB_WORKSPACE/hakios-u-boot.img"
+          tools/mkubootimg.py -d cupid -u "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
+            -o "$GITHUB_WORKSPACE/hakios-u-boot.img"
           sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
 
       - name: Upload the U-Boot build
@@ -96,8 +98,8 @@ jobs:
           name: cupid-uboot
           path: |
             hakios-u-boot.img
-            u-boot/build-cupid/u-boot.bin
-            u-boot/build-cupid/.config
+            uboot-tree/build-cupid/u-boot.bin
+            uboot-tree/build-cupid/.config
           if-no-files-found: error
           retention-days: 30
 
