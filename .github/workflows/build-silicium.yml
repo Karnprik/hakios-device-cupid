@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            build-essential clang lld make python3 python3-pip curl git unzip
+            build-essential clang llvm lld make python3 python3-pip curl git unzip
           clang --version | head -1
 
       - name: Clone the common repository and the UEFI helpers
@@ -82,7 +82,10 @@ jobs:
           M=common/Mu-Silicium
           mkdir -p "$M/BootShim" "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV" \
                    "$M/Resources/DTBs" "$M/Resources/Scripts"
-          cp hakios-uefi/BootShim/BootShim.S hakios-uefi/BootShim/Makefile "$M/BootShim/"
+          curl -fsSL -o "$M/BootShim/BootShim.S" \
+            https://raw.githubusercontent.com/Project-Silicium/Mu-Silicium/e51cd877e31c8fbb322032dc4cb6715e83d25ad3/BootShim/BootShim.S
+          curl -fsSL -o "$M/BootShim/Makefile" \
+            https://raw.githubusercontent.com/Project-Silicium/Mu-Silicium/e51cd877e31c8fbb322032dc4cb6715e83d25ad3/BootShim/Makefile
           fd=$(find artifacts/fd -name SILICIUM_UEFI.fd -print -quit)
           [ -s "$fd" ] || { echo "::error ::no FD in the artifact"; exit 1; }
           cp "$fd" "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
