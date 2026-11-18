@@ -1,0 +1,121 @@
+name: build-silicium-cupid
+
+# Follow the manual's fastboot boot path with HakiOS's Silicium UEFI, not U-Boot.
+# Waipio findings from the working mayfly port: payload at 0xB0000000, header v4,
+# and the image size covering the payload. The FD comes from the pinned CI run.
+# A green run means an image was packed; it is not a boot test.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMMON_REV: 63fc2b4633bac3af8e57dadab9f5a8d4cb940438
+  HAKIOS_UEFI_REV: 1c6522893266157506c767e2ca427053ed3634a8
+  KERNEL_RUN: 44268350646
+  FD_RUN: 44253508613
+  DEVICE: cupid
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout the device repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Install toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang lld make python3 python3-pip curl git unzip
+          clang --version | head -1
+
+      - name: Clone the common repository and the UEFI helpers
+        run: |
+          set -euo pipefail
+          git init -q common
+          git -C common remote add origin https://github.com/oosexgang/hakios-xnu-kernel.git
+          git -C common fetch --depth 1 origin "$COMMON_REV"
+          git -C common checkout -q FETCH_HEAD
+          rm -rf common/devices/cupid
+          ln -s "$GITHUB_WORKSPACE" common/devices/cupid
+          git init -q hakios-uefi
+          git -C hakios-uefi remote add origin https://github.com/oosexgang/hakios-uefi.git
+          git -C hakios-uefi fetch --depth 1 origin "$HAKIOS_UEFI_REV"
+          git -C hakios-uefi checkout -q FETCH_HEAD
+          echo "common at $(git -C common rev-parse HEAD)"
+
+      - name: Download the pinned artifacts
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, zipfile
+          T = os.environ["GH_TOKEN"]
+          base = "https://api.github.com/repos/hrihq/hakios-device-cupid/actions/runs"
+          def dl(run, name, out):
+              arts = json.loads(subprocess.check_output([
+                  "curl", "-sSL", "-H", "Authorization: Bearer " + T,
+                  f"{base}/{run}/artifacts"], text=True))["artifacts"]
+              a = next(x for x in arts if x["name"] == name)
+              z = out + ".zip"
+              subprocess.check_call(["curl", "-sSL", "-H", "Authorization: Bearer " + T, "-o", z, a["archive_download_url"]])
+              with zipfile.ZipFile(z) as f:
+                  f.extractall(out)
+              print(name, "->", out)
+          dl(int(os.environ["KERNEL_RUN"]), "cupid-kernel", "artifacts/kernel")
+          dl(int(os.environ["FD_RUN"]), "cupid-uefi-binaries", "artifacts/fd")
+          PY
+          find artifacts -type f | sort
+
+      - name: Assemble a minimal Mu-Silicium tree for the packer
+        run: |
+          set -euo pipefail
+          M=common/Mu-Silicium
+          mkdir -p "$M/BootShim" "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV" \
+                   "$M/Resources/DTBs" "$M/Resources/Scripts"
+          cp hakios-uefi/BootShim/BootShim.S hakios-uefi/BootShim/Makefile "$M/BootShim/"
+          fd=$(find artifacts/fd -name SILICIUM_UEFI.fd -print -quit)
+          [ -s "$fd" ] || { echo "::error ::no FD in the artifact"; exit 1; }
+          cp "$fd" "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
+          cp uefi/files/Resources/DTBs/cupid.dtb "$M/Resources/DTBs/cupid.dtb"
+          curl -fsSL -o "$M/Resources/Scripts/mkbootimg.py" \
+            https://raw.githubusercontent.com/oosexgang/hakios-sm7325/af52dfba33f91340bde68dbbe238ae583f9fd472/prebuilt/mkbootimg.py
+          printf 'H' > "$M/Resources/ramdisk"
+          cp tools/mkxnuimg-cupid.py common/mkxnuimg.py
+          ls -l "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
+
+      - name: Pack the payload and the boot image
+        working-directory: common
+        run: |
+          set -euo pipefail
+          python3 xnuloader/mkpayload.py --usb -o payload.bin \
+            loader.efi=../artifacts/kernel/cupid-loader.efi \
+            kernel=../artifacts/kernel/cupid-kernel \
+            ramdisk=prebuilt/userland/hello --cmdline "-v"
+          python3 mkxnuimg.py -d cupid -p payload.bin -o xnu-cupid.img
+          sha256sum xnu-cupid.img
+
+      - name: Upload the image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: cupid-silicium-img
+          path: common/xnu-cupid.img
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report
+        if: always()
+        run: |
+          echo "## cupid Silicium image" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- common: \`$COMMON_REV\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- payload base: \`0xB0000000\`, header v4" >> "$GITHUB_STEP_SUMMARY"
+          echo "A packed image is not a boot test. Use \`fastboot boot\` only." >> "$GITHUB_STEP_SUMMARY"
