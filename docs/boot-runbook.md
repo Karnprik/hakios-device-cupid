@@ -117,7 +117,35 @@ The first attempt on the real phone (serial `341db2b`) did **not** reach the loa
   was unchanged: no display, no loader.
 
 So the failure is inside BootShim / the linked FD, not in transfer, unlock or verification. The FD
-links and the platform compiles; neither is a boot test. A serial log is needed to go further.
+links and the platform compiles; neither is a boot test.
+
+### Root cause found afterwards: the payload base was wrong in three places
+
+BootShim does copy the appended `XNUP` payload (HakiOS's `hakios.patch` adds that loop), and
+`mkxnuimg-cupid.py` compiled it with `-DPAYLOAD_BASE=0xB0000000`, so the payload really was at
+`0xB0000000`. But the consumers were not:
+
+- `XnuLoader.h` in hakios-uefi hard-codes `XNU_PAYLOAD_BASE=0xF0000000` with no `#ifndef` guard,
+  and `cupid.dsc` had no `[BuildOptions]` override. The firmware looked for the payload at
+  `0xF0000000` — inside waipio's TZ apps carve-out (`0xEA000000-0xF1400000`). Its
+  `LogPayload()` / `LogPersistence()` read and write that address at startup.
+- `build-kernel.yml` built `cupid-loader.efi` with the default
+  `LOADER_CFLAGS=-DPAYLOAD_BASE=0xF0000000ULL`, so the loader looked there too.
+- `MemoryMapLib.c` reserved `"XNU Payload"` at `0xF0000000` instead of the `Kernel` window
+  containing `0xB0000000`.
+
+A proven same-family port (`cotunjr/hakios-mayfly`, Xiaomi 12S / SM8475) measures
+`PAYLOAD_BASE=0xB0000000` and overrides the UEFI base from its DSC. The fix on this branch:
+
+1. device-level `XnuLoader.h` with an `#ifndef` guard (device files are copied last over HakiOS's);
+2. `[BuildOptions] *_*_*_CC_FLAGS = -DXNU_PAYLOAD_BASE=0xB0000000ULL` in `cupid.dsc`;
+3. `build-kernel.yml` default/fallback `0xB0000000ULL`;
+4. remove the bogus `0xF0000000` payload reservation from `MemoryMapLib.c`;
+5. `tools/payload-base-check.py`, run in `check-device` and before packing, so the five copies
+   cannot drift again.
+
+The images must be rebuilt after this change. A green rebuild is still not a boot; only a loader
+banner or `fastboot getvar product: xnuloader` on the phone is proof.
 
 ## 8. Safety
 

@@ -96,6 +96,12 @@ jobs:
           cp tools/mkxnuimg-cupid.py common/mkxnuimg.py
           ls -l "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
 
+      - name: Check the payload base is consistent
+        run: |
+          set -euo pipefail
+          python3 tools/payload-base-check.py --self-test
+          python3 tools/payload-base-check.py
+
       - name: Pack the payload and the boot image
         working-directory: common
         run: |

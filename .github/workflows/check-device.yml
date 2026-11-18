@@ -30,6 +30,12 @@ jobs:
       - name: Checkout the device repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
+      - name: Check the payload base is consistent across every boot layer
+        run: |
+          set -euo pipefail
+          python3 tools/payload-base-check.py --self-test
+          python3 tools/payload-base-check.py
+
       - name: Check the GPU facts against the device tree
         run: |
           set -euo pipefail
