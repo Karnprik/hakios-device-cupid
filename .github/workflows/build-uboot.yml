@@ -1,8 +1,8 @@
 name: build-uboot-cupid
 
 # Build HakiOS's U-Boot for the Xiaomi 12 from the common repository at a pinned revision, with
-# this device repository linked in as devices/cupid. The phone's own Android device tree is the
-# firmware: U-Boot is built with EXT_DTB pointing at it. Nothing is flashed. A green run means the
+# this device repository linked in as devices/cupid, and built with this device's own device
+# tree of its own (u-boot/files/dts/.../sm8450-xiaomi-cupid.dts). Nothing is flashed. A green run means the
 # image builds; it is not a boot test.
 
 on:
@@ -87,17 +87,21 @@ jobs:
         run: |
           U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
-      - name: The phone's device tree, with a framebuffer the console can use
+      - name: Our own device tree, not the phone's Android one
         run: |
           set -euo pipefail
-          dtc -I dtb -O dts -q -o cupid.dts uefi/files/Resources/DTBs/cupid.dtb
-          python3 tools/uboot-dts.py --in cupid.dts --out cupid-u-boot.dts --usb-peripheral
-          dtc -I dts -O dtb -o cupid-u-boot.dtb cupid-u-boot.dts
-          dtc -I dtb -O dts cupid-u-boot.dtb | grep -q 'simple-framebuffer'
-          cp cupid-u-boot.dts uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
-          # the image ABL starts carries the same tree: the console and the payload window must be
-          # in the tree ABL hands over, not only in the one U-Boot compiles
-          cp cupid-u-boot.dtb common/devices/cupid/prebuilt/device-tree.dtb
+          # docs/u-boot.md: a device tree of its own on top of the upstream SoC's. The phone's Android
+          # tree has no simple-framebuffer node, so using it as U-Boot's own tree leaves the console
+          # nowhere to write and the firmware dies before it can say anything.
+          dts=uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
+          test -f "$dts"
+          grep -q 'simple-framebuffer' "$dts"
+          grep -q 'hakios-payload@b0000000' "$dts"
+          grep -q 'dr_mode = "peripheral"' "$dts"
+          grep -c 'framebuffer@b8000000' "$dts"
+          # the image ABL starts still carries the phone's own Android tree, as on redwood
+          cp uefi/files/Resources/DTBs/cupid.dtb common/devices/cupid/prebuilt/device-tree.dtb
+          dtc -I dtb -O dts -q common/devices/cupid/prebuilt/device-tree.dtb | head -3
 
       - name: Bring-up beacon (optional)
         if: inputs.beacon != ''
@@ -188,7 +192,6 @@ jobs:
 
       - name: Build U-Boot with cupid's own device tree
         env:
-          EXT_DTB: ${{ github.workspace }}/cupid-u-boot.dtb
           CROSS_COMPILE: aarch64-linux-gnu-
           U_BOOT: ${{ github.workspace }}/uboot-tree
           PAYLOAD_BASE: ${{ inputs.payload_base || '0xB0000000UL' }}
@@ -205,7 +208,7 @@ jobs:
           # Header v4 with os_version/os_patch_level 0: waipio's ABL accepts anything else and boots
           # the slot instead of the image (docs/boot-runbook.md).
           python3 tools/mkuboot-cupid.py --uboot "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
-            --dtb "$GITHUB_WORKSPACE/cupid-u-boot.dtb" \
+            --dtb "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/device-tree.dtb" \
             --mkbootimg "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/mkbootimg.py" \
             --out "$GITHUB_WORKSPACE/hakios-u-boot.img"
           sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
@@ -218,8 +221,7 @@ jobs:
             hakios-u-boot.img
             uboot-tree/build-cupid/u-boot.bin
             uboot-tree/build-cupid/.config
-            cupid-u-boot.dts
-            cupid-u-boot.dtb
+            uboot-tree/build-cupid/u-boot.dtb
           if-no-files-found: error
           retention-days: 30
 
@@ -230,6 +232,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- common repository: \`$COMMON_REV\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- U-Boot: \`$(cat hakios-uefi/u-boot/BASE 2>/dev/null || echo unknown)\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- device tree: the phone's own \`uefi/files/Resources/DTBs/cupid.dtb\` (EXT_DTB)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- U-Boot device tree: \`u-boot/files/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- appended device tree (for ABL): \`uefi/files/Resources/DTBs/cupid.dtb\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "A built image is not a boot test. Do not flash it: \`fastboot boot\` only." >> "$GITHUB_STEP_SUMMARY"
