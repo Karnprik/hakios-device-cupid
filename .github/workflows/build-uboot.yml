@@ -96,6 +96,14 @@ jobs:
         run: |
           U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
+      - name: Find the HKUB wherever ABL left it
+        run: |
+          set -euo pipefail
+          # On cupid the /chosen initrd ABL reports is the phone's own ramdisk, not the container in
+          # our boot image. The device patch makes `hakios load` search RAM for the HKUB magic.
+          ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/hakios-scan.patch" )
+          grep -n "container found at" uboot-tree/cmd/hakios.c
+
       - name: Our own device tree, not the phone's Android one
         run: |
           set -euo pipefail

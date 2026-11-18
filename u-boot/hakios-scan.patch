@@ -1,0 +1,40 @@
+diff --git a/cmd/hakios.c b/cmd/hakios.c
+--- a/cmd/hakios.c
++++ b/cmd/hakios.c
+@@ -199,6 +199,22 @@
+ 	return ret;
+ }
+ 
++/*
++ * Cupid: ABL reports a ramdisk in /chosen that is the phone's own, not the HKUB we put in the boot
++ * image. Find the container anywhere it may have been left in RAM instead of trusting that pointer.
++ * mkbootimg 4 KiB-aligns the ramdisk, so a page-sized walk is enough.
++ */
++static ulong cupid_find_hkub(void)
++{
++	ulong a;
++
++	for (a = 0x80000000UL; a < 0xC0000000UL; a += 0x1000UL) {
++		if (*(const u32 *)a == HKUB_MAGIC)
++			return a;
++	}
++	return 0;
++}
++
+ /* the size an HKUB container or an XNUP payload says it has; 0 for anything else */
+ static ulong known_size(const void *data)
+ {
+@@ -238,6 +254,13 @@
+ 		addr = hextoul(argv[1], NULL);
+ 		size = known_size(map_sysmem(addr, 0));
+ 		if (!size) {
++			ulong found = cupid_find_hkub();
++			if (found) {
++				addr = found;
++				size = known_size(map_sysmem(addr, 0));
++				printf("[oosexgang] hakios: container found at %#lx\n", addr);
++			}
++		}
+ 			printf("[oosexgang] hakios: no HKUB container or XNUP payload at %#lx to take the size from\n", addr);
+ 			return CMD_RET_USAGE;
+ 		}
