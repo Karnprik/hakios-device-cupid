@@ -61,6 +61,11 @@
   gQcomPkgTokenSpaceGuid.PcdPlatformType|"LA"
 
   #
+  # Bring-up: an ASSERT prints and carries on
+  #
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x03
+
+  #
   # Storage
   #
   gQcomPkgTokenSpaceGuid.PcdStorageIsUfs3|FALSE
