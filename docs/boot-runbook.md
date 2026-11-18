@@ -100,7 +100,26 @@ XL_RAMDISK=userland/hello ./xl run
 
 A framebuffer screenshot is the actual evidence of a boot — a green CI build is not.
 
-## 7. Safety
+## 7. First boot attempt — evidence and result (not yet a boot)
+
+The first attempt on the real phone (serial `341db2b`) did **not** reach the loader. Evidence:
+
+- `fastboot oem device-info` → `Device unlocked: true`, `critical unlocked: true`. Unlock is not the blocker.
+- `fastboot boot <image>` → `OKAY` on every attempt; the image is transferred and accepted.
+- Vendor UEFI log (`/dev/block/by-name/logfs`, FAT12, `UefiLog1.txt`): `Handling Cmd: download:001dd000`,
+  `Handling Cmd: boot`, `Decompressing kernel image total time: 222 ms`, then `Start EBS`. ABL accepted
+  and decompressed our kernel and handed off; no loader banner followed. The later `Cmdline:` and
+  `initrd size` lines come from `vendor_boot`, not from the boot image.
+- Screen stayed black; the phone returned to fastboot only after the key combo.
+- The BootShim taken from the CI image carried `FD_BASE=0xA2F00000`. It was changed to `0xA7000000`,
+  the PT_LOAD address measured from the phone's own `uefi_a.img`, and the FD was rebuilt in
+  [run 44253508613](https://github.com/hrihq/hakios-device-cupid/actions/runs/44253508613). The result
+  was unchanged: no display, no loader.
+
+So the failure is inside BootShim / the linked FD, not in transfer, unlock or verification. The FD
+links and the platform compiles; neither is a boot test. A serial log is needed to go further.
+
+## 8. Safety
 
 - `fastboot boot` only. **Never** `fastboot flash`.
 - No partition is touched. Do not run `xl ramdisk` against a partition; it is a RAM upload.
