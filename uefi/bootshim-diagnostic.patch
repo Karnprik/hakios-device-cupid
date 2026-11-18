@@ -1,6 +1,6 @@
 --- a/BootShim/BootShim.S
 +++ b/BootShim/BootShim.S
-@@ -17,6 +17,39 @@
+@@ -17,6 +17,45 @@
  #endif
  
  _Start:
@@ -9,8 +9,9 @@
 +   * Cupid bring-up test, before the FD is copied.
 +   *   screen: paint the ABL splash buffer (Display Reserved 0xB8000000) -> the panel is
 +   *           still scanned out and our code is running.
-+   *   reset:  write IMEM restart_reason 0x77665500 at 0x146AA65C and ask PSCI to reset.
-+   *           Landing in fastboot means this code ran; landing in Android means it never did.
++   *   CUPID_SHIM_HOLD: stay here, so the colour left on the panel is the proof.
++   *   otherwise: write IMEM restart_reason 0x77665500 at 0x146AA65C and ask PSCI to reset:
++   *           landing in fastboot means this code ran, landing in Android means it did not.
 +   */
 +  ldr   x7, =0xB8000000
 +  ldr   x8, =(1080 * 2400)
@@ -21,6 +22,11 @@
 +  subs  x8, x8, #1
 +  b.ne  _CupidFb
 +  dsb   sy
++#ifdef CUPID_SHIM_HOLD
++_CupidSpin:
++  wfe
++  b     _CupidSpin
++#endif
 +  movz  x7, #0xa65c
 +  movk  x7, #0x146a, lsl #16
 +  movz  w3, #0x5500
