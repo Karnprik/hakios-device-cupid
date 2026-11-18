@@ -89,6 +89,21 @@ jobs:
           dtc -I dtb -O dts -q \
             -o uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts \
             common/devices/cupid/prebuilt/device-tree.dtb
+          python3 - <<'PY'
+          import re
+          p = "uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts"
+          s = open(p).read()
+          # ABL leaves the panel's framebuffer live at 0xB8000000 (cont_splash_region).
+          # U-Boot's vidconsole needs a simple-framebuffer node; the Android DTB has none.
+          if "simple-framebuffer" not in s:
+              fb = "\n\tframebuffer0: framebuffer@b8000000 {\n\t\tcompatible = \"simple-framebuffer\";\n\t\treg = <0x0 0xb8000000 0x0 0x28e0000>;\n\t\twidth = <1080>;\n\t\theight = <2400>;\n\t\tstride = <4320>;\n\t\tformat = \"a8r8g8b8\";\n\t};\n"
+              m = re.search(r"\n\s*chosen\s*\{", s)
+              assert m, "no chosen node in the DTS"
+              s = s[:m.start()] + fb + s[m.start():]
+          s = re.sub(r'dr_mode = "[^"]*"', 'dr_mode = "peripheral"', s)
+          open(p, "w").write(s)
+          print("framebuffer and usb peripheral set")
+          PY
           wc -l uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
 
       - name: Build U-Boot with cupid's own device tree
