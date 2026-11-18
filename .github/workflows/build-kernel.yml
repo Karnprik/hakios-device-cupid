@@ -6,6 +6,12 @@ name: build-kernel-cupid
 
 on:
   workflow_dispatch:
+    inputs:
+      payload_base:
+        description: "Address where the loader/payload is placed (hex literal)"
+        required: false
+        default: "0xF0000000ULL"
+        type: string
   push:
     branches: [adreno-730-cupid]
     paths:
@@ -70,6 +76,9 @@ jobs:
           rm -rf common/devices/cupid
           ln -s "$GITHUB_WORKSPACE" common/devices/cupid
           echo "common at $(git -C common rev-parse HEAD)"
+          sed -i 's/#define PAYLOAD_BASE        0xF0000000ULL/#ifndef PAYLOAD_BASE\n#define PAYLOAD_BASE        0xF0000000ULL\n#endif/' common/xnuloader/loader.c
+          sed -i 's/-c loader.c/$LOADER_CFLAGS -c loader.c/' common/xnuloader/build.sh
+          grep -n 'PAYLOAD_BASE' common/xnuloader/loader.c | head -3
 
       - name: Configure for cupid
         working-directory: common
@@ -107,7 +116,7 @@ jobs:
           set -euo pipefail
           # no IPSW here: this loader can boot the open kernel with an Apple-free ramdisk, not Darwin
           xnuloader/mkidentity.sh --placeholder
-          xnuloader/build.sh
+          LOADER_CFLAGS="-DPAYLOAD_BASE=${{ inputs.payload_base || '0xF0000000ULL' }}" xnuloader/build.sh
           cp xnuloader/loader.efi "$GITHUB_WORKSPACE/cupid-loader.efi"
           sha256sum "$GITHUB_WORKSPACE/cupid-loader.efi"
 
