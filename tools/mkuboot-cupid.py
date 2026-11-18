@@ -26,6 +26,9 @@ def main():
     ap.add_argument('--uboot-dtb',
                     help="U-Boot's own built device tree (build/u-boot.dtb); this is the tree the console "
                          "comes from, so it is the one that must carry simple-framebuffer")
+    ap.add_argument('--ramdisk',
+                    help='an HKUB container (hakios load takes the loader and payload from it); '
+                         'empty = U-Boot waits for the host over fastboot instead')
     ap.add_argument('--mkbootimg', default='mkbootimg.py')
     ap.add_argument('--out', default='hakios-uboot-cupid.img')
     a = ap.parse_args()
@@ -53,6 +56,11 @@ def main():
 
     cmd = [sys.executable, a.mkbootimg, '--kernel', kernel, '--header_version', str(HEADER),
            '--os_version', OS_VERSION, '--os_patch_level', OS_PATCH, '-o', a.out]
+    if a.ramdisk:
+        rd = open(a.ramdisk, 'rb').read()
+        if rd[:4] != b'HKUB':
+            sys.exit('mkuboot-cupid.py: the ramdisk is not an HKUB container (mkubootimg.py -c)')
+        cmd += ['--ramdisk', a.ramdisk]
     print(' '.join(cmd))
     subprocess.check_call(cmd)
     print('%s: %d bytes (u-boot %d gz\'d, dtb %d, header v%d, os_version %s/%s)'

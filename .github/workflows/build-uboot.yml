@@ -8,6 +8,11 @@ name: build-uboot-cupid
 on:
   workflow_dispatch:
     inputs:
+      kernel_run:
+        description: 'build-kernel run id whose cupid-kernel artifact holds loader.efi and the kernel (empty = no payload)'
+        required: false
+        default: ''
+        type: string
       beacon:
         description: 'Bring-up paints: magenta at the top of _main (assembly), cyan at board_init_f (C)'
         required: false
@@ -202,6 +207,23 @@ jobs:
           grep -n 'define PAYLOAD_BASE' "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
           "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
 
+      - name: Put the loader and its payload in the image (optional)
+        if: inputs.kernel_run != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KERNEL_RUN: ${{ inputs.kernel_run }}
+        run: |
+          set -euo pipefail
+          # docs/u-boot.md: 'one image, loader and payload inside' - hakios load takes them from the
+          # ramdisk ABL loaded, so nothing has to come over USB and UFS is not needed to start.
+          gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n cupid-kernel -D k >/dev/null
+          ls -l k
+          python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
+            loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
+            ramdisk=common/prebuilt/userland/hello --cmdline=-v
+          python3 common/tools/mkubootimg.py -p payload.bin -c payload.hkub
+          ls -l payload.bin payload.hkub
+
       - name: Pack a boot image with no payload
         run: |
           set -euo pipefail
@@ -210,6 +232,7 @@ jobs:
           python3 tools/mkuboot-cupid.py --uboot "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
             --dtb "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/device-tree.dtb" \
             --uboot-dtb "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.dtb" \
+            $([ -s payload.hkub ] && echo --ramdisk "$GITHUB_WORKSPACE/payload.hkub") \
             --mkbootimg "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/mkbootimg.py" \
             --out "$GITHUB_WORKSPACE/hakios-u-boot.img"
           sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
