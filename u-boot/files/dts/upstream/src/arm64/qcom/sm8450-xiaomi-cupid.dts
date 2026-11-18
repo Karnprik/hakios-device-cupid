@@ -130,17 +130,26 @@
 /*
  * UFS: the loader reads its partitions (logdump, darwin) through U-Boot's block devices. The
  * phone's tree leaves reset-gpios empty, so U-Boot takes the controller as ABL left it.
+ *
+ * power-domains is dropped on purpose: sm8450.dtsi points it at the gcc power-controller's GDSCs,
+ * and U-Boot's Qualcomm clock drivers do not implement the power-domain uclass, so every probe
+ * failed with -19 ("power-domain driver not found") before the controller was even touched - UFS
+ * printed that and never scanned, USB printed it twice and gave up. ABL has already powered both
+ * (it uses them itself), so U-Boot only has to drive them.
  */
 &ufs_mem_hc {
+	/delete-property/ power-domains;
 	status = "okay";
 };
 
 &ufs_mem_phy {
+	/delete-property/ power-domains;
 	status = "okay";
 };
 
 /* USB 2.0 as a device: U-Boot's fastboot; the SuperSpeed PHY is left as ABL left it */
 &usb_1 {
+	/delete-property/ power-domains;	/* see ufs_mem_hc above */
 	qcom,select-utmi-as-pipe-clk;
 	dr_mode = "peripheral";
 	maximum-speed = "high-speed";
