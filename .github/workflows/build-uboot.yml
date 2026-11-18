@@ -76,6 +76,15 @@ jobs:
         run: |
           U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
+      - name: Generate the U-Boot DTS from cupid's own DTB
+        run: |
+          set -euo pipefail
+          # dtc turns the phone's DTB back into a DTS U-Boot can compile as its default tree.
+          dtc -I dtb -O dts -q \
+            -o uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts \
+            common/devices/cupid/prebuilt/device-tree.dtb
+          wc -l uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
+
       - name: Build U-Boot with cupid's own device tree
         env:
           EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
