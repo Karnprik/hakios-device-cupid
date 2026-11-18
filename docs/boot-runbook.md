@@ -202,3 +202,28 @@ vendor's DXE set is a documented dead end (ClockDxe stops the panel scanout, Pmi
 synchronous abort on SPMI); `Resources/Configs/cupid.toml` now declares
 `[vendor_drivers] mode = "none"`, and both `uefi/tools/validate.py` and `tools/uefi-build-check.py`
 accept that as a deliberate state instead of an unfinished one.
+
+## 10. Bring-up log: what the phone actually showed (2026-11-18)
+
+Every line below is an observation on the phone, not a build result.
+
+| # | Image | Screen | What it proves |
+|---|---|---|---|
+| 1 | first packed image (os_version 13 / patch 2026-11) | stayed on the bootloader's logo, then Android | ABL accepted the download and **booted the slot instead**: `logfs` shows `Handling Cmd: download:<size>` then `Booting from slot (_a)` with the ROM's own `Cmdline:` |
+| 2 | `shim_diag=-DCUPID_SHIM_BEACON -DCUPID_SHIM_HOLD` (os_version 0) | solid blue, stays | ABL ran **our** image; the panel and the splash buffer at 0xB8000000 are live |
+| 3 | `-DCUPID_SHIM_STAGE2` | green ~3 s, then the phone drops off USB and comes back to Android | shim copied FD + payload and handed over; the firmware is what dies |
+| 4 | CI carrier `Mu-cupid.img` (no payload at all) | same as 3 | the payload and the packer are not the cause |
+| 5 | DEBUG FD instead of RELEASE (mayfly's working image used DEBUG) | same as 3 | not the build target |
+| 6 | FD moved to 0xA2F00000, outside the phone's own firmware window (0xA7000000+0x2A0000) | same as 3 | not the FD address either |
+
+Conclusion: the chain is proven up to `br FD_BASE`; everything after it is silent whatever the FD
+contains. The next probe is inside the firmware: `-DCUPID_SEC_BEACON` paints **red** in the SEC
+entry (`ModuleEntryPoint.S`, before `PlatformAssemblyInitialize`) and **magenta** in `SecMain` after
+`PlatformInitialize ()`. Red without magenta localises the death to the firmware's own early setup;
+no red at all means the firmware's SEC entry is never reached, and what XBL normally hands it (EL,
+stack, DTB, the FV entry) becomes the question.
+
+The vendor log is always the first place to look: `logfs` (`/dev/block/by-name/logfs`, FAT12,
+`UefiLog*.txt`, one per boot in cycling slots) read from a root recovery with
+`adb exec-out 'dd if=/dev/block/by-name/logfs bs=4096 count=2048 2>/dev/null' > logfs.img`.
+`logdump` (HakiOS's own log partition) is all zeros until the loader writes to it.
