@@ -184,3 +184,21 @@ log to the phone screen and answers `fastboot oem console`, so no serial cable i
   as U-Boot's default tree. `CONFIG_SYS_INIT_SP_BSS_OFFSET=0x600000` is required: the default
   1.5 MiB fails `init_sp_bss_offset_check` with this ~780 KiB tree.
 - A built image is still not a boot test. Try it with `fastboot boot` only; never flash.
+
+## 9. Bring-up diagnostic: the shim runs, the FD does not
+
+A second image (`shim_diag=-DCUPID_SHIM_BEACON`) paints the ABL splash buffer and then writes
+IMEM `restart_reason` 0x77665500 at 0x146AA65C and asks PSCI to reset, before the FD is copied:
+
+- The panel showed the painted colour, so **BootShim runs and the splash buffer ABL leaves at
+  0xB8000000 is live**. The boot chain up to the shim is therefore proven; the phone then returned
+  to Android by itself, so the reset path works too.
+- The same image's FD still produced nothing, and so did the CI carrier image without any payload:
+  the failure is in the FD, not in the payload or the handoff into BootShim.
+
+The first response to that is the blob-free platform: `DXE.inc` no longer lists the phone's own DXE
+drivers, `RamManagerDxe` is out of the FDF and `PcdDebugPropertyMask` is 0x03. On this SoC family the
+vendor's DXE set is a documented dead end (ClockDxe stops the panel scanout, PmicDxe takes a
+synchronous abort on SPMI); `Resources/Configs/cupid.toml` now declares
+`[vendor_drivers] mode = "none"`, and both `uefi/tools/validate.py` and `tools/uefi-build-check.py`
+accept that as a deliberate state instead of an unfinished one.
