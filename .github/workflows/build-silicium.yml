@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            build-essential clang llvm lld make python3 python3-pip curl git unzip
+            build-essential clang llvm lld make patch python3 python3-pip curl git unzip
           clang --version | head -1
 
       - name: Clone the common repository and the UEFI helpers
@@ -93,10 +93,12 @@ jobs:
           curl -fsSL -o "$M/Resources/Scripts/mkbootimg.py" \
             https://raw.githubusercontent.com/oosexgang/hakios-sm7325/af52dfba33f91340bde68dbbe238ae583f9fd472/prebuilt/mkbootimg.py
           # HakiOS's hakios.patch adds the "XNUP" payload copy to BootShim.S (guarded by
-          # #ifdef PAYLOAD_BASE). The raw upstream file has no such loop, so without this the
+          # #ifdef PAYLOAD_BASE). The raw upstream file has no such loop, so without it the
           # payload is never moved to PAYLOAD_BASE and the firmware finds nothing at 0xB0000000.
-          ( cd "$M" && git apply --include='BootShim/BootShim.S' "$GITHUB_WORKSPACE/hakios-uefi/hakios.patch" )
-          grep -c 'PAYLOAD_BASE' "$M/BootShim/BootShim.S"
+          # The one hunk is carried here instead of relying on the pinned hakios-uefi revision,
+          # whose patch is applied only to the full tree in build-uefi.yml.
+          ( cd "$M" && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/uefi/bootshim-payload-copy.patch" )
+          [ "$(grep -c 'PAYLOAD_BASE' "$M/BootShim/BootShim.S")" = 2 ]
           printf 'H' > "$M/Resources/ramdisk"
           cp tools/mkxnuimg-cupid.py common/mkxnuimg.py
           ls -l "$M/Build/cupidPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd"
