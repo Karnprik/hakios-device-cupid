@@ -101,6 +101,16 @@ jobs:
           export THEOS="$HOME/theos"
           tools/make-kernel.sh -j4 2>&1 | tee kernel-build.log
 
+      - name: Build the loader with a placeholder identity
+        working-directory: common
+        run: |
+          set -euo pipefail
+          # no IPSW here: this loader can boot the open kernel with an Apple-free ramdisk, not Darwin
+          xnuloader/mkidentity.sh --placeholder
+          xnuloader/build.sh
+          cp xnuloader/loader.efi "$GITHUB_WORKSPACE/cupid-loader.efi"
+          sha256sum "$GITHUB_WORKSPACE/cupid-loader.efi"
+
       - name: Upload the kernel
         if: success()
         run: |
@@ -117,6 +127,7 @@ jobs:
           name: cupid-kernel
           path: |
             cupid-kernel
+            cupid-loader.efi
             common/kernel-build.log
           if-no-files-found: error
 
