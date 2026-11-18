@@ -54,7 +54,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p common/devices/cupid/prebuilt
-          cp common/devices/redwood/prebuilt/mkbootimg.py common/devices/cupid/prebuilt/mkbootimg.py
+          # The boot-image packer is a generic tool from the redwood device repository at a pinned
+          # commit; no redwood device configuration is copied into cupid.
+          curl -fsSL -o common/devices/cupid/prebuilt/mkbootimg.py \
+            https://raw.githubusercontent.com/oosexgang/hakios-sm7325/af52dfba33f91340bde68dbbe238ae583f9fd472/prebuilt/mkbootimg.py
           cp uefi/files/Resources/DTBs/cupid.dtb common/devices/cupid/prebuilt/device-tree.dtb
           file common/devices/cupid/prebuilt/device-tree.dtb
 
