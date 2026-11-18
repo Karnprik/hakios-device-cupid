@@ -55,10 +55,9 @@ jobs:
           have() { command -v "$1" >/dev/null || { echo "::error ::$1 is missing from the runner image"; exit 1; }; }
           need=()
           command -v aarch64-linux-gnu-gcc >/dev/null || need+=(gcc-aarch64-linux-gnu)
-          command -v dtc >/dev/null || need+=(device-tree-compiler)	# not in the runner image
           [ ${#need[@]} -eq 0 ] || sudo apt-get install -y --no-install-recommends "${need[@]}"
           aarch64-linux-gnu-gcc --version | head -1
-          for t in make dtc bison flex swig bc lz4 gzip python3; do have "$t"; done
+          for t in make gcc bison flex swig bc lz4 gzip python3; do have "$t"; done
 
       - name: Clone the common repository and link this device
         run: |
@@ -111,7 +110,12 @@ jobs:
           grep -c 'framebuffer@b8000000' "$dts"
           # the image ABL starts still carries the phone's own Android tree, as on redwood
           cp uefi/files/Resources/DTBs/cupid.dtb common/devices/cupid/prebuilt/device-tree.dtb
-          dtc -I dtb -O dts -q common/devices/cupid/prebuilt/device-tree.dtb | head -3
+          python3 - <<'PY'
+          import pathlib, struct
+          b = pathlib.Path("common/devices/cupid/prebuilt/device-tree.dtb").read_bytes()
+          assert b[:4] == bytes.fromhex("d00dfeed"), "the phone device tree is not a dtb"
+          print("phone dtb: %d bytes, magic d00dfeed" % len(b))
+          PY
 
       - name: Bring-up beacon (optional)
         if: inputs.beacon != ''
