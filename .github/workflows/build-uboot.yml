@@ -11,7 +11,7 @@ on:
       payload_base:
         description: 'Address where the loader/payload is placed (hex literal)'
         required: false
-        default: '0xF0000000UL'
+        default: '0xB0000000UL'
         type: string
   push:
     branches: [uboot-cupid]
@@ -82,38 +82,27 @@ jobs:
         run: |
           U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
-      - name: Generate the U-Boot DTS from cupid's own DTB
+      - name: The phone's device tree, with a framebuffer the console can use
         run: |
           set -euo pipefail
-          # dtc turns the phone's DTB back into a DTS U-Boot can compile as its default tree.
-          dtc -I dtb -O dts -q \
-            -o uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts \
-            common/devices/cupid/prebuilt/device-tree.dtb
-          python3 - <<'PY'
-          import re
-          p = "uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts"
-          s = open(p).read()
-          # ABL leaves the panel's framebuffer live at 0xB8000000 (cont_splash_region).
-          # U-Boot's vidconsole needs a simple-framebuffer node; the Android DTB has none.
-          if "simple-framebuffer" not in s:
-              fb = "\n\tframebuffer0: framebuffer@b8000000 {\n\t\tcompatible = \"simple-framebuffer\";\n\t\treg = <0x0 0xb8000000 0x0 0x28e0000>;\n\t\twidth = <1080>;\n\t\theight = <2400>;\n\t\tstride = <4320>;\n\t\tformat = \"a8r8g8b8\";\n\t};\n"
-              m = re.search(r"\n\s*chosen\s*\{", s)
-              assert m, "no chosen node in the DTS"
-              s = s[:m.start()] + fb + s[m.start():]
-          s = re.sub(r'dr_mode = "[^"]*"', 'dr_mode = "peripheral"', s)
-          open(p, "w").write(s)
-          print("framebuffer and usb peripheral set")
-          PY
-          wc -l uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
+          dtc -I dtb -O dts -q -o cupid.dts uefi/files/Resources/DTBs/cupid.dtb
+          python3 tools/uboot-dts.py --in cupid.dts --out cupid-u-boot.dts --usb-peripheral
+          dtc -I dts -O dtb -o cupid-u-boot.dtb cupid-u-boot.dts
+          dtc -I dtb -O dts cupid-u-boot.dtb | grep -q 'simple-framebuffer'
+          cp cupid-u-boot.dts uboot-tree/dts/upstream/src/arm64/qcom/sm8450-xiaomi-cupid.dts
+          # the image ABL starts carries the same tree: the console and the payload window must be
+          # in the tree ABL hands over, not only in the one U-Boot compiles
+          cp cupid-u-boot.dtb common/devices/cupid/prebuilt/device-tree.dtb
 
       - name: Build U-Boot with cupid's own device tree
         env:
-          EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
+          EXT_DTB: ${{ github.workspace }}/cupid-u-boot.dtb
           CROSS_COMPILE: aarch64-linux-gnu-
           U_BOOT: ${{ github.workspace }}/uboot-tree
-          PAYLOAD_BASE: ${{ inputs.payload_base || '0xF0000000UL' }}
+          PAYLOAD_BASE: ${{ inputs.payload_base || '0xB0000000UL' }}
         run: |
-          # SM8450's TZ apps occupy 0xF0000000; put the payload in the free high DDR window.
+          # 0xF0000000 sits inside SM8450's TZ apps carve-out; the waipio family's measured payload
+          # base is 0xB0000000 (see docs/boot-runbook.md).
           sed -i "s/#define PAYLOAD_BASE.*/#define PAYLOAD_BASE\t\t$PAYLOAD_BASE/" "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
           grep -n 'define PAYLOAD_BASE' "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
           "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
@@ -121,9 +110,12 @@ jobs:
       - name: Pack a boot image with no payload
         run: |
           set -euo pipefail
-          cd common
-          tools/mkubootimg.py -d cupid -u "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
-            -o "$GITHUB_WORKSPACE/hakios-u-boot.img"
+          # Header v4 with os_version/os_patch_level 0: waipio's ABL accepts anything else and boots
+          # the slot instead of the image (docs/boot-runbook.md).
+          python3 tools/mkuboot-cupid.py --uboot "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
+            --dtb "$GITHUB_WORKSPACE/cupid-u-boot.dtb" \
+            --mkbootimg "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/mkbootimg.py" \
+            --out "$GITHUB_WORKSPACE/hakios-u-boot.img"
           sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
 
       - name: Upload the U-Boot build
@@ -134,6 +126,8 @@ jobs:
             hakios-u-boot.img
             uboot-tree/build-cupid/u-boot.bin
             uboot-tree/build-cupid/.config
+            cupid-u-boot.dts
+            cupid-u-boot.dtb
           if-no-files-found: error
           retention-days: 30
 
