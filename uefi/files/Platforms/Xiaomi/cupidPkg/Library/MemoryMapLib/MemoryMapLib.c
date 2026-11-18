@@ -4,6 +4,7 @@
 // page tables (Qualcomm XPUs reset the SoC on speculative reads of a cacheable mapping).
 // Where cupid differs from mayfly, the phone's own tree is the source: the display region is
 // splash_region 0xB8000000 0x02B00000 in cupid.dts, the same value.
+#include <Library/MemoryMapLib.h>
 STATIC
 EFI_MEMORY_REGION_DESCRIPTOR
 gMemoryDescriptor[] = {
