@@ -209,6 +209,7 @@ jobs:
           # the slot instead of the image (docs/boot-runbook.md).
           python3 tools/mkuboot-cupid.py --uboot "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
             --dtb "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/device-tree.dtb" \
+            --uboot-dtb "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.dtb" \
             --mkbootimg "$GITHUB_WORKSPACE/common/devices/cupid/prebuilt/mkbootimg.py" \
             --out "$GITHUB_WORKSPACE/hakios-u-boot.img"
           sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
