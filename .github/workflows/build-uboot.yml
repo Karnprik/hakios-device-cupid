@@ -150,25 +150,25 @@ jobs:
               "\t0xFFFF0000u, 0xFFFF8000u, 0xFFFFFF00u, 0xFF00FF00u, 0xFF00FFFFu, 0xFF0000FFu,\n"
               "\t0xFFFF00FFu, 0xFFFFFFFFu, 0xFF8000FFu, 0xFF808080u, 0xFF008000u, 0xFF000080u,\n"
               "};\n"
-              "static void cupid_band(void)\n"
+              "static void cupid_band(int n)\n"
               "{\n"
-              "\tstatic int cupid_n;\n"
+              
               "\tvolatile u32 *fb = (volatile u32 *)0xB8000000UL;\n"
               "\tunsigned y, x;\n"
               "\n"
-              "\tif (cupid_n >= 12)\n"
+              "\tif (n >= 12)\n"
               "\t\treturn;\n"
-              "\tfor (y = (unsigned)cupid_n * 200u; y < (unsigned)(cupid_n + 1) * 200u; y++)\n"
+              "\tfor (y = (unsigned)n * 200u; y < (unsigned)(n + 1) * 200u; y++)\n"
               "\t\tfor (x = 0; x < 1080u; x++)\n"
-              "\t\t\tfb[y * 1080u + x] = cupid_colour[cupid_n];\n"
+              "\t\t\tfb[y * 1080u + x] = cupid_colour[n];\n"
               "\t__asm__ volatile(\"dsb sy\" ::: \"memory\");\n"
-              "\tcupid_n++;\n"
+              
               "}\n"
               "\n"
               "#undef INITCALL\n"
               "#define INITCALL(_call) \\\n"
               "\tdo { \\\n"
-              "\t\tcupid_band(); \\\n"
+              "\t\tcupid_band(__COUNTER__); \\\n"
               "\t\tif (_call()) { \\\n"
               "\t\t\tprintf(\"%s(): initcall %s() failed\\n\", __func__, #_call); \\\n"
               "\t\t\thang(); \\\n"
@@ -181,6 +181,7 @@ jobs:
           open(p, "w").write(s)
           print("beacons in: crt0_64.S (magenta), board_f.c (cyan + one band per INITCALL)")
           PY
+          echo "counter uses in board_f.c (must be 1: the band macro): $(grep -c '__COUNTER__' uboot-tree/common/board_f.c)"
           echo "band index -> early init call"
           awk '/static void initcall_run_f\(void\)/{f=1} f && /INITCALL\(/{print} f && /^}/{exit}' \
             uboot-tree/common/board_f.c | grep -o 'INITCALL([a-z0-9_]*)' | nl -v0 -w2 -s' = '
