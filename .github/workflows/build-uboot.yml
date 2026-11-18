@@ -1,0 +1,97 @@
+name: build-uboot-cupid
+
+# Build HakiOS's U-Boot for the Xiaomi 12 from the common repository at a pinned revision, with
+# this device repository linked in as devices/cupid. The phone's own Android device tree is the
+# firmware: U-Boot is built with EXT_DTB pointing at it. Nothing is flashed. A green run means the
+# image builds; it is not a boot test.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [uboot-cupid]
+    paths:
+      - "u-boot/**"
+      - ".github/workflows/build-uboot.yml"
+
+permissions:
+  contents: read
+
+env:
+  COMMON_REV: 63fc2b4633bac3af8e57dadab9f5a8d4cb940438
+  DEVICE: cupid
+
+jobs:
+  uboot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout the device repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git make gcc-aarch64-linux-gnu device-tree-compiler \
+            bison flex libssl-dev python3 python3-pip curl ca-certificates
+          aarch64-linux-gnu-gcc --version | head -1
+
+      - name: Clone the common repository and link this device
+        run: |
+          set -euo pipefail
+          git init -q common
+          git -C common remote add origin https://github.com/oosexgang/hakios-xnu-kernel.git
+          git -C common fetch --depth 1 origin "$COMMON_REV"
+          git -C common checkout -q FETCH_HEAD
+          rm -rf common/devices/cupid
+          ln -s "$GITHUB_WORKSPACE" common/devices/cupid
+          echo "common at $(git -C common rev-parse HEAD)"
+
+      - name: Prepare the phone's device tree and boot-image tool
+        run: |
+          set -euo pipefail
+          mkdir -p common/devices/cupid/prebuilt
+          cp common/devices/redwood/prebuilt/mkbootimg.py common/devices/cupid/prebuilt/mkbootimg.py
+          cp uefi/files/Resources/DTBs/cupid.dtb common/devices/cupid/prebuilt/device-tree.dtb
+          file common/devices/cupid/prebuilt/device-tree.dtb
+
+      - name: Assemble HakiOS's U-Boot with the cupid files
+        run: common/uefi/u-boot/apply.sh cupid
+
+      - name: Build U-Boot with cupid's own device tree
+        env:
+          EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: common/uefi/u-boot/build.sh cupid
+
+      - name: Pack a boot image with no payload
+        run: |
+          set -euo pipefail
+          cd common
+          tools/mkubootimg.py -d cupid -o "$GITHUB_WORKSPACE/hakios-u-boot.img"
+          sha256sum "$GITHUB_WORKSPACE/hakios-u-boot.img"
+
+      - name: Upload the U-Boot build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: cupid-uboot
+          path: |
+            hakios-u-boot.img
+            common/u-boot/build-cupid/u-boot.bin
+            common/u-boot/build-cupid/.config
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report
+        if: always()
+        run: |
+          echo "## cupid U-Boot" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- common repository: \`$COMMON_REV\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- U-Boot: \`$(cat common/uefi/u-boot/BASE 2>/dev/null || echo unknown)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- device tree: the phone's own \`uefi/files/Resources/DTBs/cupid.dtb\` (EXT_DTB)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "A built image is not a boot test. Do not flash it: \`fastboot boot\` only." >> "$GITHUB_STEP_SUMMARY"
