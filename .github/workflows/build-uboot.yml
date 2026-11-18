@@ -8,6 +8,11 @@ name: build-uboot-cupid
 on:
   workflow_dispatch:
     inputs:
+      beacon:
+        description: 'Bring-up paints: magenta at the top of _main (assembly), cyan at board_init_f (C)'
+        required: false
+        default: ''
+        type: string
       payload_base:
         description: 'Address where the loader/payload is placed (hex literal)'
         required: false
@@ -93,6 +98,46 @@ jobs:
           # the image ABL starts carries the same tree: the console and the payload window must be
           # in the tree ABL hands over, not only in the one U-Boot compiles
           cp cupid-u-boot.dtb common/devices/cupid/prebuilt/device-tree.dtb
+
+      - name: Bring-up beacon (optional)
+        if: inputs.beacon != ''
+        run: |
+          set -euo pipefail
+          # Two colours, one boot: magenta in the top quarter as soon as U-Boot's assembly entry runs,
+          # cyan over the whole panel when its first C function runs. Cyan means both ran and the
+          # problem is further on (video, device model); magenta alone means the C world never
+          # started; neither means the image never executed at all.
+          python3 - <<'PY'
+          import re
+          p = "uboot-tree/arch/arm/lib/crt0_64.S"
+          s = open(p).read()
+          m = re.search(r"\nENTRY\(_main\)\n", s)
+          assert m, "no ENTRY(_main) in crt0_64.S"
+          asm = (
+              "\t/* cupid bring-up: paint the top quarter of the live framebuffer magenta */\n"
+              "\tldr\tx7, =0xB8000000\n"
+              "\tldr\tx8, =(1080 * 600)\n"
+              "\tmovz\tw9, #0x00ff\n"
+              "\tmovk\tw9, #0xffff, lsl #16\n"
+              "1:\tstr\tw9, [x7], #4\n"
+              "\tsubs\tx8, x8, #1\n"
+              "\tb.ne\t1b\n"
+              "\tdsb\tsy\n"
+          )
+          s = s[:m.end()] + asm + s[m.end():]
+          open(p, "w").write(s)
+
+          p = "uboot-tree/common/board_f.c"
+          s = open(p).read()
+          a = "void board_init_f(ulong boot_flags)\n{\n"
+          assert s.count(a) == 1, "unexpected board_init_f"
+          c = ("\t/* cupid bring-up: the first C code U-Boot runs paints the whole panel cyan */\n"
+               "\t{\n\t\tvolatile uint32_t *f = (volatile uint32_t *)0xB8000000UL;\n"
+               "\t\tunsigned i;\n"
+               "\t\tfor (i = 0; i < 1080u * 2400u; i++)\n\t\t\tf[i] = 0xFF00FFFFu;\n\t}\n")
+          open(p, "w").write(s.replace(a, a + c))
+          print("beacons in: crt0_64.S (magenta top quarter) and board_f.c (cyan)")
+          PY
 
       - name: Build U-Boot with cupid's own device tree
         env:
