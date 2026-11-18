@@ -45,11 +45,11 @@ gMemoryDescriptor[] = {
   {"TAGS",              0xE8900000, 0x001200000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
   {"QTEE",              0xE9B00000, 0x000500000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
 
-  // HakiOS's own regions. The FD base (0xA2E00000) is a CHOICE in the gap the tree leaves after ADSP:
-  // confirm it against the phone's own memory map before the first run (uefi/README.md here).
+  // HakiOS's own regions. The FD follows the phone's own uefi_a.img PT_LOAD at 0xA7000000;
+  // the other HakiOS regions keep their addresses in the gap after ADSP.
   {"FD Reserved",       0xA2E00000, 0x00100000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
-  {"UEFI FD",           0xA2F00000, 0x00300000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
-  {"UEFI FD Reserved",  0xA3200000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
+  {"UEFI FD",           0xA7000000, 0x00300000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
+  {"UEFI FD Reserved",  0xA7300000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
   {"Info Blk",          0xA3401000, 0x00001000, AddMem, SYS_MEM, SYS_MEM_CAP, RtData, WRITE_BACK_XN},
   {"MMU PageTables",    0xA3402000, 0x00003000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
   {"Log Buffer",        0xA3405000, 0x00008000, AddMem, SYS_MEM, SYS_MEM_CAP, RtData, WRITE_BACK_XN},

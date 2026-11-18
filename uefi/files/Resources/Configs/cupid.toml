@@ -2,11 +2,10 @@
 requires_kernel_header = true
 
 [uefi_fd]
-# PROVISIONAL: the gap the phone's tree leaves after ADSP (0xA2E00000). Confirm against the phone's own
-# memory map before the first run (devices/cupid/uefi/README.md).
-# This is the address the memory map reserves for the UEFI FD itself (the region named "UEFI FD"),
-# not the reserved page before it -- BootShim loads the FD here.
-base = 0xA2F00000
+# The phone's own uefi_a.img is an ELF64 whose PT_LOAD maps the FV at 0xA7000000
+# (filesz 0x2a0000). Use that measured address instead of the earlier guess in the gap
+# after ADSP, which never produced a display or a loader on the first boot attempt.
+base = 0xA7000000
 size = 0x300000
 
 [boot_image_kernel]

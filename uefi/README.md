@@ -33,10 +33,9 @@ The build and the vendor's drivers: [uefi/README.md](../../../uefi/README.md).
 ## The memory map's provisional part
 
 The vendor's reservations in `Library/MemoryMapLib/MemoryMapLib.c` are read from the phone's own tree (`/reserved-memory`).
-The regions HakiOS adds for itself -- the UEFI FD, its stacks and heaps, the kernel and the XNU payload -- are placed in the
-gap the tree leaves after `adsp` (0xA2E00000-0xA6B80000), with the FD at **0xA2E00000**. That address is a choice, not a
-measurement: confirm it against the phone's own memory map (the vendor's UEFI, or a boot log) before the first run. The XNU
-payload at 0xF0000000 is HakiOS's own, from `BootShim.S`, and is fixed.
+The regions HakiOS adds for itself are placed in the gap the tree leaves after `adsp`; the UEFI FD itself is at **0xA7000000**,
+the address measured from the phone's own `uefi_a.img` ELF PT_LOAD (the earlier provisional 0xA2F00000 never produced a
+display or a loader). The XNU payload at 0xF0000000 is HakiOS's own, from `BootShim.S`, and is fixed.
 
 ## Building in GitHub Actions (no local WSL2)
 
