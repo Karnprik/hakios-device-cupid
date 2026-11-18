@@ -46,14 +46,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install the toolchain
+      - name: Toolchain (the runner already has the rest)
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            build-essential git make gcc-aarch64-linux-gnu device-tree-compiler \
-            bison flex libssl-dev python3 python3-pip curl ca-certificates
+          # Only the cross compiler is missing from the runner image; installing the long list again
+          # cost 15-20 minutes a run, and apt-get update is not needed either - the image ships its
+          # package lists. Anything that turns out to be absent is named below instead of guessed at.
+          have() { command -v "$1" >/dev/null || { echo "::error ::$1 is missing from the runner image"; exit 1; }; }
+          if ! command -v aarch64-linux-gnu-gcc >/dev/null; then
+            sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          fi
           aarch64-linux-gnu-gcc --version | head -1
+          for t in make dtc bison flex swig bc lz4 gzip python3; do have "$t"; done
 
       - name: Clone the common repository and link this device
         run: |
