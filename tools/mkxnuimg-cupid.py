@@ -30,14 +30,14 @@ DEVICES = {
     # Its ABL also takes a "fastboot boot" image only when the header's OS version and patch level are set: with
     # them at 0 it answers OKAY and starts Android from boot_a instead (seen 2026-10-31). The values are the stock
     # boot.img's, neither older nor newer than what the phone runs.
-    'mayfly': dict(fd_base=0xA7100000, fd_size=0x300000, payload_base=0xB0000000, header=4, shim_cflags='-DHAKIOS_GH_WDT_OFF',
+    'mayfly': dict(fd_base=0xA2F00000, fd_size=0x300000, payload_base=0xB0000000, header=4, shim_cflags='-DHAKIOS_GH_WDT_OFF',
                    image_size_covers_payload=True),
     # Xiaomi 12 (cupid, SM8450): same waipio family as mayfly; FD from cupidPkg is built at 0xA7000000.
     # os_version and os_patch_level stay 0: mayfly's ABL takes a "fastboot boot" image only that way, and
     # the platform's own CI-built carrier image (DeviceBuild.py) writes 0 as well. With them set, cupid
     # answers OKAY to the download and then boots the slot instead (logfs, 2026-11-18: "Booting from
     # slot (_a)" right after "Handling Cmd: boot").
-    'cupid': dict(fd_base=0xA7100000, fd_size=0x300000, payload_base=0xB0000000, header=4,
+    'cupid': dict(fd_base=0xA2F00000, fd_size=0x300000, payload_base=0xB0000000, header=4,
                   shim_cflags='-DHAKIOS_GH_WDT_OFF', image_size_covers_payload=True),
 }
 

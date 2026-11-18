@@ -2,10 +2,13 @@
 requires_kernel_header = true
 
 [uefi_fd]
-# The phone's own uefi_a.img is an ELF64 whose PT_LOAD maps the FV at 0xA7000000
-# (filesz 0x2a0000). Use that measured address instead of the earlier guess in the gap
-# after ADSP, which never produced a display or a loader on the first boot attempt.
-base = 0xA7100000
+# The FD must NOT sit in the phone's own firmware window. cupid's uefi_a.img is an ELF64 whose
+# PT_LOAD maps the vendor FV at 0xA7000000 with filesz 0x2a0000, and the tree calls that window
+# "mem dump" - it is live firmware territory, possibly XPU-protected. Both 0xA7000000 and
+# 0xA7100000 produced an instant silent death, which is what a write/jump into protected memory
+# looks like. The FD therefore goes into the free span its own carve-out list leaves after adsp:
+# 0xA2E00000-0xA6B80000 (xbl_ramdump starts at 0xA6B80000).
+base = 0xA2F00000
 size = 0x300000
 
 [boot_image_kernel]
