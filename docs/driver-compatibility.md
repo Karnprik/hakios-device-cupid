@@ -124,23 +124,24 @@ built-in defaults (`soc_mpss_mem` and `modem_ipa_fw_at`) -- without them the mod
 the first phone's addresses. `tools/soc-args-cupid.py` reads the tree with this phone's node names
 and writes the complete file; CI re-checks it.
 
-**One value the tree does not carry:** `soc_pas_mpss`, the modem's PAS id. No node in this phone's
-device tree has a `qcom,pas-id` property -- not the modem, not any other. The driver's built-in value
-is the first phone's `4`; this phone's is not in the tree and has to come from the vendor kernel's
-modem configuration. Until then the modem driver will start the wrong processor, so this is a real
-gap and not a formality.
+**One value the tree does not carry:** `soc_pas_mpss`, the modem's PAS id. The modem's node,
+`/soc/remoteproc-mss@04080000` (which `/__symbols__/modem_pas` points to), has no `qcom,pas-id`.
+Other nodes do have one -- IPA `0xf`, guest VM `0x1c`/`0x23`, CVP `0x1a`, VIDC `0x9` -- but none of
+those is the modem. The driver's built-in value is the first phone's `4`; this phone's is not in the
+tree and has to come from the vendor kernel's modem configuration. Until then the modem driver will
+start the wrong processor, so this is a real gap and not a formality.
 
 ### The audit
 
 `tools/driver-args-check.py` reads every boot-argument each driver takes and compares it with what
 this device provides (`soc.args`, `metal.args`, the config fragment). Of 189 arguments across 35
-driver files, 13 are `soc_*` and 11 of those are provided.
+driver files, 13 are `soc_*` and 12 of those are provided (`soc_smem_size` is now read from the
+phone's `smem_region` size instead of being left to its default).
 
-The two that are not:
+The one that is not:
 
-| Argument | Driver | Why it is not a gap |
+| Argument | Driver | Why it is a gap |
 |---|---|---|
-| `soc_smem_size` | `hakios.socinfo.c` | its documented default is `0x200000`, and this phone's `smem_region` is exactly 2097152 bytes -- the default is right |
 | `soc_pas_mpss` | `hakios.mpss.c` | **a real gap** -- see above; the tree does not carry it and the built-in value is the first phone's 4 |
 
 So of the 13 `soc_*` arguments the drivers read, the only one that would silently take the wrong

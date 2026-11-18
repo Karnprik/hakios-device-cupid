@@ -94,6 +94,9 @@ def build(nodes):
         target = by_phandle.get(FACTS.cells(smem["memory-region"])[0])
         if target:
             put("soc_smem", reg(target), target)
+            pairs = FACTS.reg_pairs(nodes, target)
+            if pairs:
+                put("soc_smem_size", pairs[0][1], target + " (size)")
 
     # the IPA's stream ids, from the iommus of the IPA's SMMU contexts
     for compatible, name in (("qcom,ipa-smmu-ap-cb", "soc_ipa_stream"),

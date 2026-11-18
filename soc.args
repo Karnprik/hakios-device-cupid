@@ -18,6 +18,7 @@ soc_mpss_mem=0x8bc00000
 soc_pas_ipa=0xf
 soc_rsc=0x17a20000
 soc_smem=0x80900000
+soc_smem_size=0x200000
 #
 # where each value came from:
 #   modem_ipa_fw_at    /reserved-memory/ipa_gsi_region@8b910000 (where the IPA's firmware is loaded)
@@ -35,3 +36,4 @@ soc_smem=0x80900000
 #   soc_pas_ipa        /soc/qcom,ipa_fws (qcom,pas-id)
 #   soc_rsc            /soc/rsc@17a00000 (drv-2)
 #   soc_smem           /reserved-memory/smem_region@80900000
+#   soc_smem_size      /reserved-memory/smem_region@80900000 (size)
