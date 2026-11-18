@@ -7,6 +7,12 @@ name: build-uboot-cupid
 
 on:
   workflow_dispatch:
+    inputs:
+      payload_base:
+        description: 'Address where the loader/payload is placed (hex literal)'
+        required: false
+        default: '0xF0000000UL'
+        type: string
   push:
     branches: [uboot-cupid]
     paths:
@@ -90,7 +96,11 @@ jobs:
           EXT_DTB: ${{ github.workspace }}/common/devices/cupid/prebuilt/device-tree.dtb
           CROSS_COMPILE: aarch64-linux-gnu-
           U_BOOT: ${{ github.workspace }}/uboot-tree
+          PAYLOAD_BASE: ${{ inputs.payload_base || '0xF0000000UL' }}
         run: |
+          # SM8450's TZ apps occupy 0xF0000000; put the payload in the free high DDR window.
+          sed -i "s/#define PAYLOAD_BASE.*/#define PAYLOAD_BASE\t\t$PAYLOAD_BASE/" "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
+          grep -n 'define PAYLOAD_BASE' "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
           "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
 
       - name: Pack a boot image with no payload
