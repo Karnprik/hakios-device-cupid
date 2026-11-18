@@ -8,6 +8,11 @@ name: build-silicium-cupid
 on:
   workflow_dispatch:
     inputs:
+      fd_run:
+        description: "GitHub Actions run whose cupid-uefi-binaries artifact holds the FD (empty = the pinned default)"
+        required: false
+        default: ""
+        type: string
       fd_mode:
         description: "FD build target the artifact was built with (RELEASE or DEBUG)"
         required: false
@@ -67,6 +72,8 @@ jobs:
 
       - name: Download the pinned artifacts
         run: |
+          FD_RUN="${{ inputs.fd_run || env.FD_RUN }}"
+          export FD_RUN
           set -euo pipefail
           python3 - <<'PY'
           import json, os, subprocess, zipfile
