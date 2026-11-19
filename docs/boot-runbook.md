@@ -337,3 +337,31 @@ and IOMMU init and the screen then goes dark without any device on USB. Remainin
 first IOKit drivers (the panel/framebuffer console and USB), and the payload's userland: it is only
 the 16 KiB `prebuilt/userland/hello` test executable, not a full Darwin root filesystem. Confirm
 with a readable log before changing any of it.
+
+## 14. The resident root was rejected: the window reserve is bigger than the phone's RAM window
+
+Observed 2026-11-19: every image carrying `resident=root.apfs` reset straight back to Android
+(`logfs`: download + `Decompressing kernel image` + `Start EBS`, then a slot boot ~8 s later;
+`logdump` all zeros). Every image without it ran the kernel to `bsd init` and the familiar dark
+screen. Four boots isolate the variable:
+
+| Image | u-boot.bin | resident | boot-image ramdisk | Result |
+|---|---|---|---|---|
+| CI `6b22724` (hakios-u-boot.img) | 20.7 MB | root.apfs 4 MiB | 19.2 MB HKUB | reset to Android |
+| `boot-darwin.img` (same u-boot.bin, packed without ramdisk) | 20.7 MB | root.apfs 4 MiB | none | reset to Android |
+| `ab-plat.img` (ub-plat, hello only) | 16.5 MB | none | none | kernel runs |
+| `ab-sizeprobe.img` (20.7 MB layout, hello-only container swapped in) | 20.7 MB | none | none | kernel runs, `bsd init` |
+
+So neither the binary size nor the ramdisk is the cause: the `resident` entry is. The loader places
+a resident root at `win_base + RESIDENT_RD_OFFSET` (128 MiB) and refuses it unless
+`win_size > RESIDENT_RD_OFFSET + RESIDENT_RD_RESERVE` = 128 + 768 = **896 MiB**. `choose_window()`
+takes the largest free EFI block clear of the payload window `[0xB0000000, 0xB4000000)`: on cupid
+that is at most `0xB4000000..0xEA000000` = 864 MiB, or ~738 MiB below the payload with U-Boot
+relocated under the clamped ram_top. Both are < 896 MiB, so the check can never pass here; the
+loader prints `resident ... does not fit in the memory window` and returns, and the phone ends up
+back in Android. The kernel itself is unaffected: it ran with the same window when no resident was
+present, and the reserve is a fit guard, not a subtraction from `dram-size`.
+
+Fix: `kernel/resident-window.patch` lowers `RESIDENT_RD_RESERVE` to 256 MiB (requirement: window
+> 384 MiB; margin ~354 MiB in the worst case), applied and asserted in `build-kernel.yml`.
+**Written, not run** until a boot with the resident root says otherwise.
