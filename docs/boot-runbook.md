@@ -371,3 +371,15 @@ twice. Both times the phone stayed up past 160 s / 90 s with no reset to Android
 root is accepted now. The panel showed the kernel's `zone_init` map lines (the same VM stage as
 the 61 s log), this time with root.apfs as md0. What rc.darwin does after that is **not yet
 verified**: the last lines on the panel have not been read.
+
+## 15. Home screen: assessed, not pursued (RAM-only chosen)
+
+The iOS home screen (SpringBoard) needs the full Darwin userland (`system.apfs`, ~2.5 GB from the
+IPSW 16.5 already unpacked in the common repo's `sysimage/`). That is larger than cupid's loader RAM
+window (~738-864 MiB), so it cannot travel in the payload: it needs the `darwin` UFS partition, which
+does not exist on this phone yet. Creating it is the dual-boot install (`docs/dual-boot.md` in the
+common repo): carve 20 GiB from `userdata` — **erases Android's data** — `fastboot -w`, flash the
+system volume and `boot_a`, `set_active`. Persistent and destructive. UFS read is also still untested
+here, and `darwin-write.py`'s GPT constants are redwood's, not cupid's. The user chose to stay
+RAM-only (Android intact), so this path is recorded, not taken. Software rendering could draw the
+home screen without the Adreno 730 (QEMU does), but storage — not the GPU — is the gate.
