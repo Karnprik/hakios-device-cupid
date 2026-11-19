@@ -6,15 +6,15 @@ diff --git a/cmd/hakios.c b/cmd/hakios.c
  }
  
 +/*
-+ * Cupid: ABL reports a ramdisk in /chosen that is the phone's own, not the HKUB we put in the boot
-+ * image. Find the container anywhere it may have been left in RAM instead of trusting that pointer.
-+ * mkbootimg 4 KiB-aligns the ramdisk, so a page-sized walk is enough.
++ * Cupid: ABL's /chosen initrd points at the phone's own ramdisk, not at the HKUB in our image, and
++ * the first word there is random. Search all RAM that ABL could have handed us, in 256-byte steps
++ * (mkbootimg aligns to 4 KiB, but this also catches a relocated copy).
 + */
 +static ulong cupid_find_hkub(void)
 +{
 +	ulong a;
 +
-+	for (a = 0x80000000UL; a < 0xC0000000UL; a += 0x1000UL) {
++	for (a = 0x80000000UL; a < 0x400000000UL; a += 0x100UL) {
 +		if (*(const u32 *)a == HKUB_MAGIC)
 +			return a;
 +	}
