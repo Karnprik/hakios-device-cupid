@@ -83,6 +83,10 @@ jobs:
           sed -i -E "s/^[[:space:]]*#define[[:space:]]+PAYLOAD_BASE[[:space:]]+.*/#define PAYLOAD_BASE ${{ inputs.payload_base || '0xB0000000ULL' }}/" common/xnuloader/loader.c
           grep -n "define PAYLOAD_BASE" common/xnuloader/loader.c
           grep -q "PAYLOAD_BASE.*${{ inputs.payload_base || '0xB0000000ULL' }}" common/xnuloader/loader.c || { echo "::error ::PAYLOAD_BASE was not rewritten"; exit 1; }
+          # The loader only recognized redwood's framebuffer; on cupid it fell back to the QEMU
+          # platform (wrong GIC/UART) and froze right after the banner. Give it a real cupid platform.
+          ( cd common && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/kernel/cupid-platform.patch" )
+          grep -n "platform_cupid" common/xnuloader/loader.c | head -3
 
       - name: Configure for cupid
         working-directory: common
