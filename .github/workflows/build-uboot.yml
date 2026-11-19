@@ -103,6 +103,10 @@ jobs:
           # our boot image. The device patch makes `hakios load` search RAM for the HKUB magic.
           ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/hakios-scan.patch" )
           grep -n "container found at" uboot-tree/cmd/hakios.c
+          # Keep U-Boot's relocation below the ramdisk ABL left behind; otherwise it overwrites
+          # the HKUB before hakios load can read it (first word at the pointer was random).
+          ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/ram-top.patch" )
+          grep -n "board_get_usable_ram_top" uboot-tree/arch/arm/mach-snapdragon/board.c | tail -1
 
       - name: Our own device tree, not the phone's Android one
         run: |
