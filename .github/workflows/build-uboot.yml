@@ -252,25 +252,6 @@ jobs:
           grep -n 'define PAYLOAD_BASE' "$GITHUB_WORKSPACE/uboot-tree/cmd/hakios.c"
           "$GITHUB_WORKSPACE/hakios-uefi/u-boot/build.sh" cupid
 
-      - name: Put the loader and its payload in the image (optional)
-        if: inputs.kernel_run != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KERNEL_RUN: ${{ inputs.kernel_run }}
-        run: |
-          set -euo pipefail
-          # docs/u-boot.md: 'one image, loader and payload inside' - hakios load takes them from the
-          # ramdisk ABL loaded, so nothing has to come over USB and UFS is not needed to start.
-          gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n cupid-kernel -D k >/dev/null
-          ls -l k
-          python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
-            loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
-            ramdisk=common/prebuilt/userland/hello --cmdline=-v
-          python3 common/tools/mkubootimg.py -d cupid \
-            -u "$GITHUB_WORKSPACE/uboot-tree/build-cupid/u-boot.bin" \
-            -p payload.bin -c payload.hkub
-          ls -l payload.bin payload.hkub
-
       - name: Pack a boot image with no payload
         run: |
           set -euo pipefail
