@@ -139,7 +139,9 @@ jobs:
           export PATH="$PWD/xnu-deps/host/bin:$PATH"
           export THEOS="$HOME/theos"
           cd userland
-          ./build.sh
+          # rc.darwin runs a few Darwin programs and halts instead of handing process 1 to
+          # launchd, so a failed launch does not reboot the phone before the log can be read.
+          RC=rc.darwin ./build.sh
           ls -l root.apfs
           cp root.apfs "$GITHUB_WORKSPACE/root.apfs"
 
