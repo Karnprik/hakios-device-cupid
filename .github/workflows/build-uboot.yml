@@ -217,7 +217,8 @@ jobs:
           gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n cupid-kernel -D k >/dev/null
           python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
             loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
-            ramdisk=common/prebuilt/userland/hello --cmdline=-v
+            ramdisk=common/prebuilt/userland/hello \
+            resident=k/root.apfs --cmdline=-v
           # HKUB: u32 magic/version/count/header_size, then 32-byte entries, 4 KiB aligned.
           python3 - <<'PY'
           import pathlib, struct, zlib
