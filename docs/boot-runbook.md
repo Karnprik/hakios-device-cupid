@@ -365,3 +365,9 @@ present, and the reserve is a fit guard, not a subtraction from `dram-size`.
 Fix: `kernel/resident-window.patch` lowers `RESIDENT_RD_RESERVE` to 256 MiB (requirement: window
 > 384 MiB; margin ~354 MiB in the worst case), applied and asserted in `build-kernel.yml`.
 **Written, not run** until a boot with the resident root says otherwise.
+
+Update, same day: the rebuilt image (run `44494411804`, loader with the 256 MiB reserve) booted
+twice. Both times the phone stayed up past 160 s / 90 s with no reset to Android — the resident
+root is accepted now. The panel showed the kernel's `zone_init` map lines (the same VM stage as
+the 61 s log), this time with root.apfs as md0. What rc.darwin does after that is **not yet
+verified**: the last lines on the panel have not been read.
