@@ -309,3 +309,9 @@ further.
 
 The loader can now start; what it does next (kernel boot arguments, XNU drivers, userspace) has not
 yet been checked on hardware. Keep that section marked unverified until the next log says.
+
+Update, same session: the phone shows the HakiOS logo and `kernel.ver=...` below it, then stops.
+So XNU is entered and has printed its first line; the freeze is inside early kernel init, not in any
+bootloader stage. No USB device appeared from the loader, so the kernel log could not be collected
+over the cable. The next diagnostic is the exact text after `kernel.ver=` (a close-up photo), then
+the device's boot arguments (`soc.args`) and the first driver the kernel starts.
