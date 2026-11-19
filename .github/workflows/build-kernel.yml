@@ -130,6 +130,19 @@ jobs:
           cp xnuloader/loader.efi "$GITHUB_WORKSPACE/cupid-loader.efi"
           sha256sum "$GITHUB_WORKSPACE/cupid-loader.efi"
 
+      - name: Build the small userland (root.apfs)
+        working-directory: common
+        run: |
+          set -euo pipefail
+          # A first boot needs a real root filesystem: "hello" is only a 16 KiB test program.
+          # root.apfs carries init, etc/rc and the launchd jobs as the second ramdisk (resident).
+          export PATH="$PWD/xnu-deps/host/bin:$PATH"
+          export THEOS="$HOME/theos"
+          cd userland
+          ./build.sh
+          ls -l root.apfs
+          cp root.apfs "$GITHUB_WORKSPACE/root.apfs"
+
       - name: Upload the kernel
         if: success()
         run: |
@@ -148,6 +161,7 @@ jobs:
             cupid-kernel
             cupid-loader.efi
             common/kernel-build.log
+            root.apfs
           if-no-files-found: error
 
       - name: Report
