@@ -139,6 +139,7 @@
  */
 &ufs_mem_hc {
 	/delete-property/ power-domains;
+	/delete-property/ iommus;	/* no IOMMU driver in U-Boot: dev_iommu_enable() fails with -19 */
 	status = "okay";
 };
 
@@ -150,6 +151,7 @@
 /* USB 2.0 as a device: U-Boot's fastboot; the SuperSpeed PHY is left as ABL left it */
 &usb_1 {
 	/delete-property/ power-domains;	/* see ufs_mem_hc above */
+	/delete-property/ iommus;		/* ditto: no IOMMU driver, probe dies with -19 */
 	qcom,select-utmi-as-pipe-clk;
 	dr_mode = "peripheral";
 	maximum-speed = "high-speed";
