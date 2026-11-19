@@ -96,18 +96,6 @@ jobs:
         run: |
           U_BOOT="$GITHUB_WORKSPACE/uboot-tree" "$GITHUB_WORKSPACE/hakios-uefi/u-boot/apply.sh" cupid
 
-      - name: Find the HKUB wherever ABL left it
-        run: |
-          set -euo pipefail
-          # On cupid the /chosen initrd ABL reports is the phone's own ramdisk, not the container in
-          # our boot image. The device patch makes `hakios load` search RAM for the HKUB magic.
-          ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/hakios-scan.patch" )
-          grep -n "container found at" uboot-tree/cmd/hakios.c
-          # Keep U-Boot's relocation below the ramdisk ABL left behind; otherwise it overwrites
-          # the HKUB before hakios load can read it (first word at the pointer was random).
-          ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/ram-top.patch" )
-          grep -n "board_get_usable_ram_top" uboot-tree/arch/arm/mach-snapdragon/board.c | tail -1
-
       - name: Our own device tree, not the phone's Android one
         run: |
           set -euo pipefail
@@ -215,6 +203,42 @@ jobs:
           echo "band index -> early init call"
           awk '/static void initcall_run_f\(void\)/{f=1} f && /INITCALL\(/{print} f && /^}/{exit}' \
             uboot-tree/common/board_f.c | grep -o 'INITCALL([a-z0-9_]*)' | nl -v0 -w2 -s' = '
+
+      - name: Embed the loader and its payload in U-Boot
+        if: inputs.kernel_run != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KERNEL_RUN: ${{ inputs.kernel_run }}
+        run: |
+          set -euo pipefail
+          # ABL did not leave our ramdisk anywhere readable, and U-Boot overwrote the DT pointer.
+          # Link the HKUB into U-Boot itself instead: it is relocated with the binary and needs no
+          # firmware handoff, no USB and no UFS (docs/u-boot.md, "one image, loader and payload inside").
+          gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n cupid-kernel -D k >/dev/null
+          python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
+            loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
+            ramdisk=common/prebuilt/userland/hello --cmdline=-v
+          # HKUB: u32 magic/version/count/header_size, then 32-byte entries, 4 KiB aligned.
+          python3 - <<'PY'
+          import pathlib, struct, zlib
+          r = pathlib.Path(".")
+          entries = [(b"payload", (r/"payload.bin").read_bytes()),
+                     (b"loader", (r/"k"/"cupid-loader.efi").read_bytes())]
+          head = 16 + 32 * len(entries)
+          off = (head + 0xfff) & ~0xfff
+          table = b""; body = b""
+          for name, data in entries:
+              table += struct.pack("<16sIIII", name, off + len(body), len(data), zlib.crc32(data), 0)
+              body += data + b"\0" * (-len(data) % 0x1000)
+          h = struct.pack("<4sIII", b"HKUB", 1, len(entries), head) + table
+          (r/"payload.hkub").write_bytes(h + b"\0" * (off - len(h)) + body)
+          print("HKUB %d bytes" % (r/"payload.hkub").stat().st_size)
+          PY
+          test -s payload.hkub
+          ( cd uboot-tree && patch -p1 --forward --batch -i "$GITHUB_WORKSPACE/u-boot/embed-payload.patch" )
+          sed -i "s|/CUPID_PAYLOAD_PATH/|$GITHUB_WORKSPACE/payload.hkub|" uboot-tree/arch/arm/lib/crt0_64.S
+          grep -n "incbin" uboot-tree/arch/arm/lib/crt0_64.S
+          grep -n "embedded container" uboot-tree/cmd/hakios.c
 
       - name: Build U-Boot with cupid's own device tree
         env:
