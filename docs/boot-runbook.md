@@ -287,3 +287,25 @@ anything the C environment has not set up yet.
 Still open: U-Boot's own USB gadget did not enumerate on the host after the banner, so the loader
 (`hakios load`) has not been started yet and `fastboot oem console` has nothing to answer with. That
 is the next step, and it is independent of the console, which works.
+
+## 13. First loader boot on cupid: the embedded container
+
+`fastboot boot` of the U-Boot image with the HKUB container **linked into the binary** finally got
+past the handoff. Observed on the phone 2026-11-19:
+
+```
+[oosexgang] hakios: embedded container 14999552 bytes
+[oosexgang] hakios: payload of ... bytes at 0xb0000000
+HakiOS logo on the panel
+```
+
+Why this works when the ramdisk did not: on this phone ABL does not leave the boot image's ramdisk
+anywhere U-Boot can read it. `/chosen` from ABL points at a 27.9 MB vendor ramdisk whose first word
+was random (`0x184c2102`), and neither a 16 GB RAM scan nor clamping U-Boot's relocation below the
+payload found our HKUB. Linking it in with `.incbin` (u-boot/embed-payload.patch) makes it part of
+U-Boot's own relocated image: no ABI handoff, no ramdisk, no USB and no UFS needed to start the
+loader. That is the "one image, loader and payload inside" row of docs/u-boot.md, taken one step
+further.
+
+The loader can now start; what it does next (kernel boot arguments, XNU drivers, userspace) has not
+yet been checked on hardware. Keep that section marked unverified until the next log says.
