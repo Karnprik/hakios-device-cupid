@@ -315,3 +315,25 @@ So XNU is entered and has printed its first line; the freeze is inside early ker
 bootloader stage. No USB device appeared from the loader, so the kernel log could not be collected
 over the cable. The next diagnostic is the exact text after `kernel.ver=` (a close-up photo), then
 the device's boot arguments (`soc.args`) and the first driver the kernel starts.
+
+Latest evidence (photo of the panel at about 61 s into the boot, kernel still running):
+
+```
+[61.294213] vm_compressor_mode is 2
+[61.294...] zone_init: map VI/RO/RW/CENO/GEN0..GEN3/DATA ...
+[61.294...] VM_bootstrap_done: maps 163 entries, 500 holes
+[61.299032] IOMMU_setownership ENABLED
+[61.299041] ATM-subsystem is initialized.
+[61.300516] Telemetry: Sampling all tasks once per 1 second
+[61.305390] panic_trace: PE_early_debug_enable_trace enter/exit   (not a panic)
+[61.306052] RegInitRedirHandler / Requested coredump handler for kernel
+[61.306069] Initializing session KDP
+[61.317021] iBoot usage: version:8.2.16.658
+```
+
+There is no `panic:` line, no `Assertion failed`, and no `SOCDump`. The loader's own watchdog is
+not armed on cupid (`wdt_arm()` returns unless the platform is redwood). So XNU gets well past VM
+and IOMMU init and the screen then goes dark without any device on USB. Remaining suspects are the
+first IOKit drivers (the panel/framebuffer console and USB), and the payload's userland: it is only
+the 16 KiB `prebuilt/userland/hello` test executable, not a full Darwin root filesystem. Confirm
+with a readable log before changing any of it.
