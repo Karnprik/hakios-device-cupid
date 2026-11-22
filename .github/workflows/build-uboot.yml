@@ -214,7 +214,7 @@ jobs:
           # ABL did not leave our ramdisk anywhere readable, and U-Boot overwrote the DT pointer.
           # Link the HKUB into U-Boot itself instead: it is relocated with the binary and needs no
           # firmware handoff, no USB and no UFS (docs/u-boot.md, "one image, loader and payload inside").
-          gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n cupid-kernel -D k >/dev/null
+          gh run download "$KERNEL_RUN" -R "hrihq/hakios-device-cupid" -n cupid-kernel -D k >/dev/null
           python3 common/xnuloader/mkpayload.py --usb -o payload.bin \
             loader.efi=k/cupid-loader.efi kernel=k/cupid-kernel \
             ramdisk=common/prebuilt/userland/hello \
